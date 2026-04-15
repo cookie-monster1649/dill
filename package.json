@@ -1,0 +1,38 @@
+{
+  "name": "dill-bot",
+  "version": "1.0.0",
+  "description": "A Slack bot for managing rotations and scheduled tasks",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "prod": "NODE_ENV=production node src/index.js",
+    "test": "jest",
+    "health": "node scripts/health-check.js",
+    "setup-storage": "node scripts/setup-persistent-storage.js",
+    "docker:build": "docker build -t dill-bot .",
+    "docker:run": "docker run -d --name dill-bot --restart unless-stopped --env-file .env dill-bot"
+  },
+  "dependencies": {
+    "@slack/bolt": "^3.17.1",
+    "cron": "^3.1.6",
+    "dotenv": "^16.3.1",
+    "luxon": "^3.7.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "jest": "^29.7.0"
+  },
+  "keywords": [
+    "slack",
+    "bot",
+    "rotation",
+    "scheduling",
+    "persistent-storage"
+  ],
+  "author": "Dill Bot Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.14.0"
+  }
+}
