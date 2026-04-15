@@ -4,6 +4,8 @@ Dill is a Slack bot for managing team rotations and scheduled task queues. It pr
 
 Whether you're running on-call rotations, meeting facilitators, or any recurring team responsibility, Dill keeps things fair and hands-off.
 
+> **GenAI project** – Dill was built with generative AI tooling and has been validated and in active use by a team for over a year.
+
 ---
 
 ## Features
