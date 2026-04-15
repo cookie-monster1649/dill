@@ -11,6 +11,10 @@ activestate.json
 analytics.json
 leave.json
 bad-slack-backup.json
+real-backup-message.json
+
+# Backup source files
+*.js.bak
 
 # Data file backups
 *.json.bak
