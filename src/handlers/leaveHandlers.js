@@ -60,11 +60,12 @@ async function handleLeaveAddOpen(bot, client, triggerId, channel) {
  * @param {object} client
  */
 async function handleLeaveAddSubmit(bot, { ack, view, client }) {
-  const values   = view.state.values;
-  const channel  = view.private_metadata;
-  const userIds  = values.leave_users?.users_input?.selected_users || [];
+  const values    = view.state.values;
+  const channel   = view.private_metadata;
+  const userIds   = values.leave_users?.users_input?.selected_users || [];
   const startDate = values.leave_start?.start_input?.selected_date;
   const endDate   = values.leave_end?.end_input?.selected_date;
+  const comment   = values.leave_comment?.comment_input?.value?.trim() || null;
 
   // ── Validate dates ──
   if (!startDate || !endDate) {
@@ -89,7 +90,7 @@ async function handleLeaveAddSubmit(bot, { ack, view, client }) {
   await ack();
 
   for (const userId of userIds) {
-    addLeaveBlock(bot.leaveStore, channel, userId, startDate, endDate);
+    addLeaveBlock(bot.leaveStore, channel, userId, startDate, endDate, comment);
   }
 
   await bot.createBackup();

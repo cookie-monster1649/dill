@@ -113,13 +113,11 @@ class DillBot {
 
     this.app.view('dill_select',            handlers.handleViewSubmission.bind(handlers));
     this.app.view('dill_new',               handlers.handleRotationFormSubmission.bind(handlers));
-    this.app.view('rotation_settings',      handlers.handleRotationSettingsSubmission.bind(handlers));
     this.app.view('delete_rotation_confirm',handlers.handleDeleteConfirmation.bind(handlers));
     this.app.view('delete_backup_confirm',  this.handleDeleteBackupConfirm.bind(this));
 
     this.app.action('create_new',           handlers.handleCreateNewAction.bind(handlers));
     this.app.action('edit_rotation',        handlers.handleEditRotationAction.bind(handlers));
-    this.app.action('rotation_settings',    handlers.handleRotationSettingsAction.bind(handlers));
     this.app.action('delete_rotation_start',handlers.handleDeleteStartAction.bind(handlers));
     this.app.action('accept',               handlers.handleAcceptAction.bind(handlers));
     this.app.action('skip',                 handlers.handleSkipAction.bind(handlers));

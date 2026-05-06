@@ -76,7 +76,10 @@ async function openNewRotationModal(bot, client, triggerId, channel, preName = '
  */
 function buildNewRotationViewForBot(bot, channel, preName = '') {
   const existingConfig = preName ? bot.configStore.getItem(channel, preName) : null;
-  return buildNewRotationView(channel, preName, existingConfig, bot.timezoneOptions);
+  const schedule = preName && existingConfig
+    ? getRotationSchedule(bot.queueStore, channel, preName, existingConfig.members || [])
+    : null;
+  return buildNewRotationView(channel, preName, existingConfig, bot.timezoneOptions, schedule);
 }
 
 // ── Rotation Overview Blocks ──────────────────────────────────────────────────
@@ -126,16 +129,9 @@ async function buildRotationsViewBlocks(bot, channel) {
       const cfg = channelConfig[name];
       const members = cfg.members || [];
 
-      // Settings gear button in the section header
       blocks.push({
         type: 'section',
         text: { type: 'mrkdwn', text: `*${name}*` },
-        accessory: {
-          type: 'button',
-          text: { type: 'plain_text', text: '⚙', emoji: true },
-          action_id: 'rotation_settings',
-          value: name,
-        },
       });
 
       if (members.length > 0) {

@@ -95,30 +95,6 @@ class RotationCrudHandlers {
     }
   }
 
-  /**
-   * Handles the 'Settings' button – pushes the per-member last-accepted-date
-   * settings modal.
-   */
-  async handleRotationSettingsAction({ ack, body, client }) {
-    await ack();
-    try {
-      const channel      = body.view.private_metadata;
-      const rotationName = body.actions[0].value;
-      const cfg          = this.bot.configStore.getItem(channel, rotationName);
-      if (!cfg) {
-        console.error(`[ERROR] Rotation '${rotationName}' not found in channel ${channel}`);
-        return;
-      }
-
-      const { getRotationSchedule } = require('../utils/rotationHelpers');
-      const schedule = getRotationSchedule(this.bot.queueStore, channel, rotationName, cfg.members);
-      const view     = this._buildRotationSettingsView(channel, rotationName, cfg, schedule);
-
-      await client.views.push({ trigger_id: body.trigger_id, view });
-    } catch (error) {
-      this._handleModalOpenError(error, body, client, 'opening the settings');
-    }
-  }
 
   // ── Modal submissions ─────────────────────────────────────────────────────────
 
@@ -208,6 +184,22 @@ class RotationCrudHandlers {
         }
       }
 
+      // Apply any last-accepted-date changes from the date-picker section.
+      // Pickers are indexed against oldMembers (as rendered); members removed
+      // in this same submission are already gone from schedule, so findIndex
+      // naturally returns -1 for them.
+      let datesChanged = false;
+      oldMembers.forEach((memberId, index) => {
+        const fieldValue = v[`lastdate_${index}`]?.[`lastdate_${memberId}`];
+        if (!fieldValue) return;
+        const newDate = fieldValue.selected_date || null;
+        const entry   = schedule.find(t => t.user === memberId);
+        if (!entry || newDate === entry.lastAcceptedDate) return;
+        entry.lastAcceptedDate = newDate;
+        datesChanged = true;
+      });
+      if (datesChanged) schedule.sort(compareByLastAccepted);
+
       this.bot.queueStore.setItem(channel, newName, schedule);
     } else {
       const { generateShuffledRotation } = require('../utils/rotationHelpers');
@@ -223,63 +215,6 @@ class RotationCrudHandlers {
     await this._refreshOverviewModal(client, body.view.root_view_id, channel);
   }
 
-  /**
-   * Handles the rotation settings form submission (last-accepted-date updates).
-   */
-  async handleRotationSettingsSubmission({ ack, body, view, client }) {
-    try {
-      await ack();
-
-      let parsedMetadata;
-      try {
-        parsedMetadata = JSON.parse(view.private_metadata);
-      } catch (parseError) {
-        console.error('[ERROR] Failed to parse settings metadata:', parseError);
-        return;
-      }
-
-      const { channel, rotationName } = parsedMetadata;
-      const cfg = this.bot.configStore.getItem(channel, rotationName);
-      if (!cfg) {
-        console.error(`[ERROR] Rotation '${rotationName}' not found in channel ${channel}`);
-        return;
-      }
-
-      const { getRotationSchedule } = require('../utils/rotationHelpers');
-      let schedule   = getRotationSchedule(this.bot.queueStore, channel, rotationName, cfg.members);
-      const values   = view.state.values;
-      let hasChanges = false;
-
-      cfg.members.forEach((memberId, index) => {
-        const blockId  = `member_${index}`;
-        const actionId = `date_${memberId}`;
-        if (!values[blockId]?.[actionId]) return;
-
-        const newDate      = values[blockId][actionId].selected_date;
-        const memberEntry  = schedule.find(s => s.user === memberId);
-        if (!memberEntry) return;
-
-        const normalizedDate = newDate || null;
-        if (normalizedDate !== memberEntry.lastAcceptedDate) {
-          console.log(`[INFO] Updated last accepted date for ${memberId} in ${rotationName}: ${memberEntry.lastAcceptedDate} -> ${normalizedDate ?? 'null'}`);
-          memberEntry.lastAcceptedDate = normalizedDate;
-          hasChanges = true;
-        }
-      });
-
-      if (hasChanges) {
-        schedule.sort(compareByLastAccepted);
-        this.bot.queueStore.setItem(channel, rotationName, schedule);
-        this.bot.queueStore.save();
-        await this.bot.createBackup();
-        console.log(`[INFO] Updated rotation settings for '${rotationName}' in channel ${channel}`);
-      }
-
-      await this._refreshOverviewModal(client, body.view.root_view_id, channel);
-    } catch (error) {
-      console.error('[ERROR] Failed to handle rotation settings submission:', error);
-    }
-  }
 
   /**
    * Handles the delete-confirmation modal submission.
@@ -304,56 +239,6 @@ class RotationCrudHandlers {
 
   // ── Private helpers ───────────────────────────────────────────────────────────
 
-  /**
-   * Builds the rotation settings modal (last-accepted-date pickers per member).
-   *
-   * @param {string} channel
-   * @param {string} rotationName
-   * @param {object} cfg - Rotation config from configStore
-   * @param {Array}  schedule - Queue entries from queueStore
-   * @returns {object} Slack modal view
-   *
-   * @example schedule entry: { user: 'U123', lastAcceptedDate: '2024-01-15', isSkipped: false }
-   */
-  _buildRotationSettingsView(channel, rotationName, cfg, schedule) {
-    const blocks = [
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*${rotationName}* – Last Accepted Date Settings\n\nSet the last accepted date for each member. This affects the rotation order.`
-        }
-      },
-      { type: 'divider' }
-    ];
-
-    cfg.members.forEach((memberId, index) => {
-      const memberEntry = schedule.find(s => s.user === memberId);
-      const currentDate = memberEntry?.lastAcceptedDate || '';
-
-      blocks.push({
-        type:     'input',
-        block_id: `member_${index}`,
-        label:    { type: 'plain_text', text: `<@${memberId}>` },
-        element: {
-          type:        'datepicker',
-          action_id:   `date_${memberId}`,
-          placeholder: { type: 'plain_text', text: 'Select date (leave empty for never accepted)' },
-          ...(currentDate && { initial_date: currentDate })
-        }
-      });
-    });
-
-    return {
-      type:             'modal',
-      callback_id:      'rotation_settings',
-      private_metadata: JSON.stringify({ channel, rotationName }),
-      title:  { type: 'plain_text', text: 'Rotation Settings' },
-      submit: { type: 'plain_text', text: 'Save' },
-      close:  { type: 'plain_text', text: 'Cancel' },
-      blocks
-    };
-  }
 
   /**
    * Refreshes the root overview modal (dill_select) after any CRUD operation.

@@ -7,7 +7,7 @@
 //   {
 //     "C123": {
 //       "U456": [
-//         { "id": "abc123", "startDate": "2026-04-14", "endDate": "2026-04-18" },
+//         { "id": "abc123", "startDate": "2026-04-14", "endDate": "2026-04-18", "comment": "Annual leave" },
 //         { "id": "def456", "startDate": "2026-05-01", "endDate": "2026-05-05" }
 //       ]
 //     }
@@ -23,7 +23,7 @@ const { DateTime } = require('luxon');
  * @param {object} leaveStore - NestedStore instance
  * @param {string} channel    - Slack channel ID
  * @param {string} userId     - Slack user ID
- * @returns {Array<{id: string, startDate: string, endDate: string}>}
+ * @returns {Array<{id: string, startDate: string, endDate: string, comment?: string}>}
  */
 function getLeaveBlocks(leaveStore, channel, userId) {
   const channelData = leaveStore.data[channel] || {};
@@ -36,13 +36,13 @@ function getLeaveBlocks(leaveStore, channel, userId) {
  *
  * Example output:
  *   [
- *     { userId: 'U456', id: 'abc123', startDate: '2026-04-14', endDate: '2026-04-18' },
+ *     { userId: 'U456', id: 'abc123', startDate: '2026-04-14', endDate: '2026-04-18', comment: 'Annual leave' },
  *     { userId: 'U789', id: 'zzz999', startDate: '2026-05-01', endDate: '2026-05-03' },
  *   ]
  *
  * @param {object} leaveStore
  * @param {string} channel
- * @returns {Array<{userId: string, id: string, startDate: string, endDate: string}>}
+ * @returns {Array<{userId: string, id: string, startDate: string, endDate: string, comment?: string}>}
  */
 function getAllChannelLeave(leaveStore, channel) {
   const channelData = leaveStore.data[channel] || {};
@@ -82,13 +82,16 @@ function isUserOnLeave(leaveStore, channel, userId, isoDate) {
  * @param {string} userId
  * @param {string} startDate  – YYYY-MM-DD
  * @param {string} endDate    – YYYY-MM-DD
+ * @param {string|null} [comment] – optional plaintext note
  */
-function addLeaveBlock(leaveStore, channel, userId, startDate, endDate) {
+function addLeaveBlock(leaveStore, channel, userId, startDate, endDate, comment = null) {
   if (!leaveStore.data[channel]) leaveStore.data[channel] = {};
   if (!leaveStore.data[channel][userId]) leaveStore.data[channel][userId] = [];
 
   const id = Math.random().toString(36).slice(2, 8);
-  leaveStore.data[channel][userId].push({ id, startDate, endDate });
+  const block = { id, startDate, endDate };
+  if (comment) block.comment = comment;
+  leaveStore.data[channel][userId].push(block);
   leaveStore.save();
 }
 

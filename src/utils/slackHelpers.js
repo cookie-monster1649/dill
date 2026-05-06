@@ -137,7 +137,7 @@ function buildPickBlocks(rotationName, userId, tz, pickDate = new Date()) {
  * @param {Array} timezoneOptions - Available timezone options
  * @returns {object} Slack modal view configuration
  */
-function buildNewRotationView(channel, preName = '', existingConfig = null, timezoneOptions = []) {
+function buildNewRotationView(channel, preName = '', existingConfig = null, timezoneOptions = [], schedule = null) {
   const members = (existingConfig || {}).members || [];
   
   const dayOptions = [
@@ -248,9 +248,9 @@ function buildNewRotationView(channel, preName = '', existingConfig = null, time
       },
       
       // Timezone selection
-      { 
-        type: 'input', 
-        block_id: 'schedule_tz', 
+      {
+        type: 'input',
+        block_id: 'schedule_tz',
         label: { type: 'plain_text', text: 'In (Timezone)' },
         element: {
           type: 'static_select',
@@ -258,12 +258,39 @@ function buildNewRotationView(channel, preName = '', existingConfig = null, time
           placeholder: { type: 'plain_text', text: 'Select a timezone' },
           ...(initialTimezoneOption && { initial_option: initialTimezoneOption }),
           options: timezoneOptions
-        } 
+        }
       },
 
-
-      
-
+      // Last accepted dates — only shown when editing an existing rotation.
+      // Each member gets a mrkdwn section (renders the @mention) paired with an
+      // input block (datepicker value is captured on submit).
+      ...(preName && schedule && members.length > 0 ? [
+        { type: 'divider' },
+        { type: 'header', text: { type: 'plain_text', text: 'Last Accepted Dates' } },
+        {
+          type: 'context',
+          elements: [{ type: 'mrkdwn', text: '_Adjust when each member last accepted a pick. Affects the rotation order._' }],
+        },
+        ...members.flatMap((memberId, index) => {
+          const entry = schedule.find(s => s.user === memberId);
+          const currentDate = entry?.lastAcceptedDate || null;
+          return [
+            { type: 'section', text: { type: 'mrkdwn', text: `<@${memberId}>` } },
+            {
+              type: 'input',
+              block_id: `lastdate_${index}`,
+              optional: true,
+              label: { type: 'plain_text', text: 'Last accepted' },
+              element: {
+                type: 'datepicker',
+                action_id: `lastdate_${memberId}`,
+                placeholder: { type: 'plain_text', text: 'Never accepted' },
+                ...(currentDate && { initial_date: currentDate }),
+              },
+            },
+          ];
+        }),
+      ] : []),
     ]
   };
 }

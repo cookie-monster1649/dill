@@ -56,10 +56,11 @@ function buildLeaveViewBlocks(leaveStore, channel) {
       const start = formatLeaveDate(entry.startDate);
       const end   = formatLeaveDate(entry.endDate);
       const dateRange = start === end ? start : `${start} – ${end}`;
+      const commentLine = entry.comment ? `\n_${entry.comment}_` : '';
 
       blocks.push({
         type: 'section',
-        text: { type: 'mrkdwn', text: `<@${entry.userId}>  ${dateRange}` },
+        text: { type: 'mrkdwn', text: `<@${entry.userId}>  ${dateRange}${commentLine}` },
         accessory: {
           type: 'button',
           text: { type: 'plain_text', text: 'Remove', emoji: false },
@@ -153,6 +154,18 @@ function buildLeaveFormView(channel) {
           action_id: 'end_input',
         },
       },
+      {
+        type: 'input',
+        block_id: 'leave_comment',
+        optional: true,
+        label: { type: 'plain_text', text: 'Comment (optional)' },
+        element: {
+          type: 'plain_text_input',
+          action_id: 'comment_input',
+          placeholder: { type: 'plain_text', text: 'e.g. Annual leave, conference, appointment' },
+          max_length: 200,
+        },
+      },
     ],
   };
 }
@@ -166,7 +179,7 @@ function buildLeaveFormView(channel) {
  * @returns {string}
  */
 function formatLeaveDate(isoDate) {
-  return DateTime.fromISO(isoDate).toFormat('LLL dd yyyy');
+  return DateTime.fromISO(isoDate).toFormat('ccc d LLLL');
 }
 
 module.exports = { buildLeaveView, buildLeaveViewBlocks, buildLeaveFormView };

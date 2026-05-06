@@ -34,12 +34,10 @@ class ActionHandlers {
   handleCreateNewAction(p)                { return this._crud.handleCreateNewAction(p); }
   handleEditRotationAction(p)             { return this._crud.handleEditRotationAction(p); }
   handleDeleteStartAction(p)              { return this._crud.handleDeleteStartAction(p); }
-  handleRotationSettingsAction(p)         { return this._crud.handleRotationSettingsAction(p); }
 
   // ── View submissions ─────────────────────────────────────────────────────────
   handleViewSubmission(p)                 { return this._crud.handleViewSubmission(p); }
   handleRotationFormSubmission(p)         { return this._crud.handleRotationFormSubmission(p); }
-  handleRotationSettingsSubmission(p)     { return this._crud.handleRotationSettingsSubmission(p); }
   handleDeleteConfirmation(p)             { return this._crud.handleDeleteConfirmation(p); }
 }
 
