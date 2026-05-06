@@ -33,10 +33,6 @@ class PersistentStorageService {
     this.stores = stores;
     this.config = config;
     this.lastBackupTimestamp = null;
-    this.lastBackupTime = 0;
-    this.lastBackupMessageTs = null; // Store the last backup message timestamp
-    this.pendingBackup = false;
-    this.backupThrottleMs = config.BACKUP_THROTTLE_MS;
   }
 
   /**
@@ -189,40 +185,10 @@ class PersistentStorageService {
   }
 
   /**
-   * Splits a string into chunks of specified size.
-   * @param {string} str - The string to split
-   * @param {number} size - The size of each chunk
-   * @returns {Array<string>} Array of string chunks
-   */
-  splitJsonForSlack(str, size = 2900) {
-    const chunks = [];
-    for (let i = 0; i < str.length; i += size) {
-      chunks.push(str.slice(i, i + size));
-    }
-    return chunks;
-  }
-
-  /**
    * Backs up the database by posting a message to a Slack channel.
    * Only one backup message is kept in the channel at any time.
    */
   async backupToSlackChannel() {
-    const now = Date.now();
-    if (now - this.lastBackupTime < this.backupThrottleMs) {
-      if (!this.pendingBackup) {
-        this.pendingBackup = true;
-        const waitMs = this.backupThrottleMs - (now - this.lastBackupTime);
-        console.log(`[INFO] Backup throttled. Will run in ${Math.ceil(waitMs/1000)}s.`);
-        setTimeout(async () => {
-          this.pendingBackup = false;
-          await this.backupToSlackChannel();
-        }, waitMs);
-      } else {
-        console.log('[INFO] Backup already scheduled, skipping duplicate request.');
-      }
-      return;
-    }
-    this.lastBackupTime = now;
     try {
       const dump = this.createDatabaseDump();
       const dumpJson = JSON.stringify(dump, null, 2);
@@ -418,37 +384,6 @@ class PersistentStorageService {
 
 
   /**
-   * Extracts backup information from a compact backup message.
-   * 
-   * @param {object} message - The Slack message object
-   * @returns {object|null} The backup info or null
-   */
-  extractBackupInfo(message) {
-    if (!message.blocks) return null;
-    
-    for (const block of message.blocks) {
-      if (block.type === 'section' && block.text && block.text.text) {
-        const text = block.text.text;
-        
-        // Extract timestamp from the text
-        const timestampMatch = text.match(/Timestamp: (.+)/);
-        const hashMatch = text.match(/Hash: `([a-f0-9]+)`/);
-        
-        if (timestampMatch && hashMatch) {
-          return {
-            timestamp: timestampMatch[1],
-            dataHash: hashMatch[1],
-            type: 'compact',
-            message: text
-          };
-        }
-      }
-    }
-    
-    return null;
-  }
-
-  /**
    * Restores the database from a backup dump.
    * 
    * @param {object} dump - The database dump object
@@ -495,6 +430,7 @@ class PersistentStorageService {
 
       if (dump.data.analytics && this.stores.analyticsService) {
         this.stores.analyticsService.analyticsStore.data = dump.data.analytics;
+        this.stores.analyticsService.analyticsStore.save();
         console.log('[INFO] Restored analytics store');
       }
 

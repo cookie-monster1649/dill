@@ -236,7 +236,7 @@ function buildQueueBlocks(bot, channel, name, cfg, members) {
     }
 
     const dateText = entry.lastAcceptedDate
-      ? ` • Last accepted: ${entry.lastAcceptedDate}`
+      ? ` • Last accepted: ${DateTime.fromISO(entry.lastAcceptedDate).toFormat('ccc d LLLL')}`
       : ' • Never accepted';
 
     return {

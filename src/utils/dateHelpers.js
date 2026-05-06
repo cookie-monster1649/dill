@@ -139,20 +139,6 @@ function getNextOccurrences(config, count, anchorDate) {
 }
 
 /**
- * Formats a date into a human-readable string.
- * 
- * @param {Date} date - The date to format
- * @returns {string} Formatted date string or 'Invalid Date' if date is invalid
- * 
- * @example
- * const formatted = formatDate(new Date('2024-01-15')); // Returns 'Mon Jan 15 2024'
- */
-function formatDate(date) {
-  
-  return date ? date.toDateString() : 'Invalid Date';
-}
-
-/**
  * Generates timezone options for the rotation form dropdown.
  *
  * Uses IANA named timezones (e.g. Australia/Sydney) instead of fixed-offset
@@ -246,7 +232,7 @@ const { DateTime } = require('luxon');
 function formatDateTz(date, tz) {
   let dt = date instanceof DateTime ? date : DateTime.fromJSDate(date instanceof Date ? date : new Date(date));
   if (tz) dt = dt.setZone(tz);
-  return dt.toFormat('ccc LLL dd yyyy'); // e.g., Tue Jul 15 2025
+  return dt.toFormat('ccc d LLLL'); // e.g., Thu 21 April
 }
 
 /**
@@ -265,7 +251,6 @@ module.exports = {
   WEEKDAY_MAP,
   getWeekNumber,
   getNextOccurrences,
-  formatDate,
   generateTimezoneOptions,
   formatDateTz,
   getIsoDateTz

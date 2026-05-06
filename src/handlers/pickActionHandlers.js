@@ -58,12 +58,14 @@ class PickActionHandlers {
     const dateISO = getIsoDateTz(date, cfg.tz);
 
     // ── Track analytics ──────────────────────────────────────────────────────
+    // Pass dateISO as the store key so the duplicate-pick guard (which also
+    // uses getIsoDateTz) looks up events under the same timezone-aware date.
     this.bot.analyticsService.trackEvent('pick_accepted', {
       channelId, responder, messageTs,
       name,       // rotation name
       user,       // picked user
       date: dateISO
-    });
+    }, dateISO);
 
     // ── Update queue state ───────────────────────────────────────────────────
     reorderAfterAccept(this.bot.queueStore, channelId, name, user, cfg);

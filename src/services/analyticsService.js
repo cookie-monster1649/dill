@@ -15,10 +15,9 @@ class AnalyticsService {
    * Creates a new AnalyticsService instance.
    * @param {number} retentionDays - Number of days to retain analytics data
    */
-  constructor(retentionDays = 90, createBackupCallback = null) {
+  constructor(retentionDays = 90) {
     this.analyticsStore = new NestedStore('analytics.json');
     this.retentionDays = retentionDays;
-    this.createBackup = createBackupCallback;
   }
 
   /**
@@ -34,20 +33,22 @@ class AnalyticsService {
    *   messageTs: '1234567890.123456'
    * });
    */
-  trackEvent(eventType, data) {
+  trackEvent(eventType, data, dateKey = null) {
     const now = new Date().toISOString();
     const event = {
       timestamp: now,
       type: eventType,
       data
     };
-    
-    const today = new Date().toISOString().split('T')[0];
+
+    // Use the caller-supplied date key when provided (e.g. a timezone-aware date
+    // for pick events) so the duplicate-pick guard can look up events by the same
+    // key.  Fall back to UTC date for events that don't need TZ-awareness.
+    const today = dateKey || new Date().toISOString().split('T')[0];
     const dailyEvents = this.analyticsStore.getItem('events', today) || [];
     dailyEvents.push(event);
     this.analyticsStore.setItem('events', today, dailyEvents);
     this.analyticsStore.save();
-    if (this.createBackup) this.createBackup();
   }
 
   /**
@@ -70,7 +71,6 @@ class AnalyticsService {
     
     if (cleaned) {
       this.analyticsStore.save();
-      if (this.createBackup) this.createBackup();
       console.log('[INFO] Cleaned up old analytics data');
     }
   }

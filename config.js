@@ -32,8 +32,6 @@ module.exports = {
   
   // Persistent Storage settings
   PERSISTENT_STORAGE_ENABLED: process.env.DILL_STORAGE_CHANNEL_ID ? true : false,
-  BACKUP_INTERVAL_MINUTES: 30,    // How often to create automatic backups
-  BACKUP_THROTTLE_MS: 60000,      // Minimum ms between successive backup writes
   MAX_BACKUP_MESSAGE_SIZE: 40000, // Slack message size limit
   
   // Logging
