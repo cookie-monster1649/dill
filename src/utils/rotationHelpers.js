@@ -388,6 +388,23 @@ function estimateNextPickDates(schedule, config, leaveStore, channel, limit = 3)
   return result;
 }
 
+// ── Rotation Name Normalisation ──────────────────────────────────────────────
+//
+// Slack rotation names can contain emoji and vary in case. To avoid mismatches
+// when comparing user-typed names against stored keys, we strip emoji and
+// normalise to lowercase before any comparison.
+//
+// Example:
+//   normalizeRotationName('🥒 On-Call')  →  'on-call'
+//   normalizeRotationName('On-Call ')    →  'on-call'
+
+function normalizeRotationName(name) {
+  return (name || '')
+    .replace(/[\p{Emoji_Presentation}\p{Emoji}‍]+/gu, '')
+    .toLowerCase()
+    .trim();
+}
+
 module.exports = {
   compareByLastAccepted,
   generateShuffledRotation,
@@ -400,4 +417,5 @@ module.exports = {
   resetDailySkips,
   generateUpcomingPickDates,
   estimateNextPickDates,
+  normalizeRotationName,
 };

@@ -6,7 +6,7 @@
 
 const { compareByLastAccepted, generateShuffledRotation } = require('../utils/rotationHelpers');
 const { getIsoDateTz }          = require('../utils/dateHelpers');
-const { normalizeRotationName } = require('../utils/rotationUtils');
+const { normalizeRotationName } = require('../utils/rotationHelpers');
 const config                    = require('../../config');
 
 // Builds a minimal modal used to replace the edit view after a danger action completes.
