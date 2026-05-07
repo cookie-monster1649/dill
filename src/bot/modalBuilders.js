@@ -238,12 +238,6 @@ function buildQueueBlocks(bot, channel, name, cfg, members) {
     return {
       type: 'section',
       text: { type: 'mrkdwn', text: `• ${userText}${dateText}` },
-      accessory: {
-        type: 'button',
-        text: { type: 'plain_text', text: 'Skip', emoji: true },
-        action_id: 'future_skip',
-        value: JSON.stringify({ channel, name, user: entry.user, index: i }),
-      },
     };
   });
 }
