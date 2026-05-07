@@ -349,7 +349,14 @@ function generateUpcomingPickDates(config, from, maxDays = 180) {
 function estimateNextPickDates(schedule, config, leaveStore, channel, limit = 3) {
   const tz        = config.tz || 'UTC';
   const today     = DateTime.now().setZone(tz);
-  const pickDates = generateUpcomingPickDates(config, today, 180);
+  const todayIso  = today.toISODate();
+  let   pickDates = generateUpcomingPickDates(config, today, 180);
+
+  // If any member accepted today, that pick is already consumed — exclude today
+  // so the simulation doesn't show it as an upcoming slot.
+  if (schedule.some(e => e.lastAcceptedDate === todayIso)) {
+    pickDates = pickDates.filter(d => d.toISODate() !== todayIso);
+  }
 
   // Simulated FIFO queue — starts in actual queue order (sorted by lastAcceptedDate)
   const queue  = schedule.map(e => e.user);
