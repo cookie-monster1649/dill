@@ -11,7 +11,7 @@ const { slackApiCall } = require('../utils/slackHelpers');
 const { buildPickBlocks } = require('../utils/slackHelpers');
 const { getIsoDateTz } = require('../utils/dateHelpers');
 const { peekNextUser, handleUserSkip, resetDailySkips } = require('../utils/rotationHelpers');
-const { normalizeRotationName } = require('../utils/rotationUtils');
+const { normalizeRotationName } = require('../utils/rotationHelpers');
 const { isUserOnLeave } = require('./leaveHelpers');
 
 // ── Pick Dispatch ─────────────────────────────────────────────────────────────

@@ -4,7 +4,7 @@
 // These touch multiple stores (config, queue, analytics) and must stay in sync,
 // which is why they live together rather than scattered across app.js.
 
-const { normalizeRotationName } = require('../utils/rotationUtils');
+const { normalizeRotationName } = require('../utils/rotationHelpers');
 
 // ── Deletion ──────────────────────────────────────────────────────────────────
 

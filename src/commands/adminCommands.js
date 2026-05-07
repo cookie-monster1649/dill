@@ -9,7 +9,7 @@
 const { DateTime } = require('luxon');
 const { getIsoDateTz } = require('../utils/dateHelpers');
 const { compareByLastAccepted, generateShuffledRotation, getRotationSchedule, estimateNextPickDates } = require('../utils/rotationHelpers');
-const { normalizeRotationName } = require('../utils/rotationUtils');
+const { normalizeRotationName } = require('../utils/rotationHelpers');
 const { startPick } = require('../bot/pickLifecycle');
 
 // ── Help ──────────────────────────────────────────────────────────────────────
