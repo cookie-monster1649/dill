@@ -130,8 +130,8 @@ async function buildRotationsViewBlocks(bot, channel) {
       const members = cfg.members || [];
 
       blocks.push({
-        type: 'section',
-        text: { type: 'mrkdwn', text: `*${name}*` },
+        type: 'header',
+        text: { type: 'plain_text', text: name },
       });
 
       if (members.length > 0) {
@@ -223,7 +223,10 @@ function buildQueueBlocks(bot, channel, name, cfg, members) {
   // Check leave status once per render using today's date in the rotation's timezone
   const todayIso = DateTime.now().setZone(cfg.tz || 'UTC').toISODate();
 
-  return schedule.map((entry, i) => {
+  // Build field pairs: [memberText, dateText] per entry.
+  // Each section block holds up to 5 pairs (Slack caps fields at 10 elements).
+  // Example row: ['<@U123> _(on leave)_', 'Mon 17 April'] or ['<@U456>', 'Never accepted']
+  const fieldPairs = schedule.map(entry => {
     let userText = `<@${entry.user}>`;
     if (isUserOnLeave(bot.leaveStore, channel, entry.user, todayIso)) {
       userText += ' _(on leave)_';
@@ -232,14 +235,36 @@ function buildQueueBlocks(bot, channel, name, cfg, members) {
     }
 
     const dateText = entry.lastAcceptedDate
-      ? ` • Last accepted: ${DateTime.fromISO(entry.lastAcceptedDate).toFormat('ccc d LLLL')}`
-      : ' • Never accepted';
+      ? DateTime.fromISO(entry.lastAcceptedDate).toFormat('ccc d LLLL')
+      : '_Never accepted_';
 
-    return {
-      type: 'section',
-      text: { type: 'mrkdwn', text: `• ${userText}${dateText}` },
-    };
+    return [
+      { type: 'mrkdwn', text: userText },
+      { type: 'mrkdwn', text: dateText },
+    ];
   });
+
+  // Column header — rendered once before the chunked data rows
+  const headerBlock = {
+    type: 'section',
+    fields: [
+      { type: 'mrkdwn', text: '*Member*' },
+      { type: 'mrkdwn', text: '*Last accepted*' },
+    ],
+  };
+
+  // Chunk into groups of 5 pairs and emit one section block per chunk
+  const CHUNK_SIZE = 5;
+  const dataBlocks = [];
+  for (let i = 0; i < fieldPairs.length; i += CHUNK_SIZE) {
+    const chunk = fieldPairs.slice(i, i + CHUNK_SIZE);
+    dataBlocks.push({
+      type: 'section',
+      fields: chunk.flat(),
+    });
+  }
+
+  return [headerBlock, ...dataBlocks];
 }
 
 module.exports = { openSelectModal, openNewRotationModal, buildNewRotationViewForBot, buildRotationsViewBlocks, buildRotationsView };

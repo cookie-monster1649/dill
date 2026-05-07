@@ -280,7 +280,7 @@ function buildNewRotationView(channel, preName = '', existingConfig = null, time
               type: 'input',
               block_id: `lastdate_${index}`,
               optional: true,
-              label: { type: 'plain_text', text: 'Last accepted' },
+              label: { type: 'plain_text', text: 'Last' },
               element: {
                 type: 'datepicker',
                 action_id: `lastdate_${memberId}`,
