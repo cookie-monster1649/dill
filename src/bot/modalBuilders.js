@@ -220,9 +220,9 @@ function buildQueueBlocks(bot, channel, name, cfg, members) {
     return [{ type: 'section', text: { type: 'mrkdwn', text: '_No members in queue._' } }];
   }
 
-  // Estimate next pick dates for the top 3 members only (capped to avoid runaway simulation).
+  // Estimate next pick dates for up to 12 members.
   // Must run before the display re-sort so it uses the real queue order.
-  const nextPickDates = estimateNextPickDates(schedule, cfg, bot.leaveStore, channel, 3);
+  const nextPickDates = estimateNextPickDates(schedule, cfg, bot.leaveStore, channel, 12);
 
   // Check leave/skip status using today's date in the rotation's timezone
   const todayIso = DateTime.now().setZone(cfg.tz || 'UTC').toISODate();
