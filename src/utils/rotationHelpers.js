@@ -1,4 +1,6 @@
+const { DateTime }      = require('luxon');
 const { getIsoDateTz } = require('./dateHelpers');
+const { isUserOnLeave } = require('../bot/leaveHelpers');
 
 /**
  * @typedef {Object} Turn
@@ -278,6 +280,107 @@ function resetDailySkips(queueStore, channel, name, config) {
   console.log(`[INFO] New queue order: ${schedule.map(t => `${t.user}${t.lastAcceptedDate ? ` (accepted: ${t.lastAcceptedDate})` : ' (never accepted)'}`).join(' → ')}`);
 }
 
+// ── Next-pick estimation ──────────────────────────────────────────────────────
+
+/**
+ * Generates upcoming pick dates for a rotation starting from a given day.
+ * Mirrors the week-interval gate in SchedulerService so estimates match reality.
+ *
+ * Example output for a Mon/Wed weekly rotation starting from 2026-05-07:
+ *   [DateTime(2026-05-11), DateTime(2026-05-13), DateTime(2026-05-18), ...]
+ *
+ * @param {object}   config   - Rotation config (days, frequency, tz, startDate)
+ * @param {DateTime} from     - Start date (Luxon DateTime in the rotation's timezone)
+ * @param {number}   maxDays  - How many days ahead to search (default 180)
+ * @returns {DateTime[]}
+ */
+function generateUpcomingPickDates(config, from, maxDays = 180) {
+  // Scheduler dayMap: mon=1...sat=6, sun=0 (matches JS Date.getDay())
+  const dayMap   = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6, sun: 0 };
+  const pickDays = new Set((config.days || []).map(d => dayMap[d]));
+
+  const interval = config.frequency === 'fortnightly' ? 2 :
+                   config.frequency === 'monthly'      ? 4 : 1;
+
+  // Pre-parse startDate once — used for the week-interval gate
+  const startDt = config.startDate
+    ? DateTime.fromISO(config.startDate).setZone(config.tz || 'UTC')
+    : null;
+
+  const dates  = [];
+  let   cursor = from.startOf('day');
+  const end    = from.plus({ days: maxDays });
+
+  while (cursor <= end) {
+    // Luxon weekday: 1=Mon...6=Sat, 7=Sun → convert to JS-style (0=Sun)
+    const jsDay = cursor.weekday === 7 ? 0 : cursor.weekday;
+
+    if (pickDays.has(jsDay)) {
+      const fires = interval === 1 || !startDt
+        ? true
+        : Math.round(cursor.diff(startDt, 'weeks').weeks) % interval === 0;
+
+      if (fires) dates.push(cursor);
+    }
+
+    cursor = cursor.plus({ days: 1 });
+  }
+
+  return dates;
+}
+
+/**
+ * Estimates the next pick date for the next `limit` actual picks in the simulation.
+ * Simulates picks forward from today and records dates for whoever genuinely gets
+ * picked next — regardless of their position in the queue. This means someone on
+ * leave who would otherwise be next will correctly yield their slot to the next
+ * available member.
+ *
+ * Example output (limit=3, where U123 is on leave so U789 jumps ahead):
+ *   Map { 'U789' => '2026-05-12', 'U123' => '2026-05-19', 'U456' => '2026-05-26' }
+ *
+ * @param {object[]} schedule   - Sorted queue [{user, lastAcceptedDate, isSkipped}]
+ * @param {object}   config     - Rotation config
+ * @param {object}   leaveStore - NestedStore for leave data
+ * @param {string}   channel    - Slack channel ID
+ * @param {number}   [limit=3]  - How many picks to estimate
+ * @returns {Map<string, string>} userId → ISO date string
+ */
+function estimateNextPickDates(schedule, config, leaveStore, channel, limit = 3) {
+  const tz        = config.tz || 'UTC';
+  const today     = DateTime.now().setZone(tz);
+  const pickDates = generateUpcomingPickDates(config, today, 180);
+
+  // Simulated FIFO queue — starts in actual queue order (sorted by lastAcceptedDate)
+  const queue  = schedule.map(e => e.user);
+  const result = new Map();
+
+  for (const pickDate of pickDates) {
+    if (result.size >= limit) break;
+
+    const dateIso = pickDate.toISODate();
+
+    // First person in the simulated queue who is not on leave on this date
+    const pickedIndex = queue.findIndex(
+      userId => !isUserOnLeave(leaveStore, channel, userId, dateIso)
+    );
+    if (pickedIndex === -1) continue; // Everyone on leave this pick date
+
+    const pickedUser = queue[pickedIndex];
+
+    // Record the first time each user is picked (a user can only appear once)
+    if (!result.has(pickedUser)) {
+      result.set(pickedUser, dateIso);
+    }
+
+    // Rotate picked user to back of simulated queue
+    queue.splice(pickedIndex, 1);
+    queue.push(pickedUser);
+  }
+
+  return result;
+}
+
 module.exports = {
   compareByLastAccepted,
   generateShuffledRotation,
@@ -288,4 +391,6 @@ module.exports = {
   peekNextUser,
   reorderAfterAccept,
   resetDailySkips,
+  generateUpcomingPickDates,
+  estimateNextPickDates,
 };

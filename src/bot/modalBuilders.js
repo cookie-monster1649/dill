@@ -5,7 +5,7 @@
 // to change (UI tweaks) that's distinct from routing or lifecycle concerns.
 
 const { buildNewRotationView } = require('../utils/slackHelpers');
-const { compareByLastAccepted, getRotationSchedule } = require('../utils/rotationHelpers');
+const { compareByLastAccepted, getRotationSchedule, estimateNextPickDates } = require('../utils/rotationHelpers');
 const { isUserOnLeave } = require('./leaveHelpers');
 const { DateTime } = require('luxon');
 
@@ -220,27 +220,45 @@ function buildQueueBlocks(bot, channel, name, cfg, members) {
     return [{ type: 'section', text: { type: 'mrkdwn', text: '_No members in queue._' } }];
   }
 
-  // Check leave status once per render using today's date in the rotation's timezone
+  // Estimate next pick dates for the top 3 members only (capped to avoid runaway simulation).
+  // Must run before the display re-sort so it uses the real queue order.
+  const nextPickDates = estimateNextPickDates(schedule, cfg, bot.leaveStore, channel, 3);
+
+  // Check leave/skip status using today's date in the rotation's timezone
   const todayIso = DateTime.now().setZone(cfg.tz || 'UTC').toISODate();
 
-  // Build field pairs: [memberText, dateText] per entry.
+  // Re-sort for display only — does not affect the stored queue.
+  // Primary: next up date ascending (soonest first; members with an estimate rank above those without).
+  // Secondary: lastAcceptedDate oldest-first for members with no estimate (same as queue order).
+  // JS sort is stable so ties preserve the existing lastAcceptedDate order within each group.
+  schedule.sort((a, b) => {
+    const aDate = nextPickDates.get(a.user);
+    const bDate = nextPickDates.get(b.user);
+    if (aDate && bDate) return aDate.localeCompare(bDate);
+    if (aDate) return -1;
+    if (bDate) return 1;
+    return compareByLastAccepted(a, b);
+  });
+
+  // Build field pairs: [position + memberText, nextUpText] per entry.
   // Each section block holds up to 5 pairs (Slack caps fields at 10 elements).
-  // Example row: ['<@U123> _(on leave)_', 'Mon 17 April'] or ['<@U456>', 'Never accepted']
-  const fieldPairs = schedule.map(entry => {
-    let userText = `<@${entry.user}>`;
+  // Example row: ['1. @Alice _(on leave)_', 'Mon 19 May'] or ['4. @Dave', '—']
+  const fieldPairs = schedule.map((entry, i) => {
+    let userText = `${i + 1}. <@${entry.user}>`;
     if (isUserOnLeave(bot.leaveStore, channel, entry.user, todayIso)) {
       userText += ' _(on leave)_';
     } else if (entry.isSkipped) {
       userText += ' _(skipped)_';
     }
 
-    const dateText = entry.lastAcceptedDate
-      ? DateTime.fromISO(entry.lastAcceptedDate).toFormat('ccc d LLLL')
-      : '_Never accepted_';
+    const estimatedDate = nextPickDates.get(entry.user);
+    const nextUpText    = estimatedDate
+      ? DateTime.fromISO(estimatedDate).toFormat('ccc d LLLL')
+      : '—';
 
     return [
       { type: 'mrkdwn', text: userText },
-      { type: 'mrkdwn', text: dateText },
+      { type: 'mrkdwn', text: nextUpText },
     ];
   });
 
@@ -249,7 +267,7 @@ function buildQueueBlocks(bot, channel, name, cfg, members) {
     type: 'section',
     fields: [
       { type: 'mrkdwn', text: '*Member*' },
-      { type: 'mrkdwn', text: '*Last accepted*' },
+      { type: 'mrkdwn', text: '*Next up*' },
     ],
   };
 
