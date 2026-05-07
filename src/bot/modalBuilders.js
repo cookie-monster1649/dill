@@ -130,8 +130,14 @@ async function buildRotationsViewBlocks(bot, channel) {
       const members = cfg.members || [];
 
       blocks.push({
-        type: 'header',
-        text: { type: 'plain_text', text: name },
+        type: 'section',
+        text: { type: 'mrkdwn', text: `*${name}*` },
+        accessory: {
+          type: 'button',
+          text: { type: 'plain_text', text: ':gear:', emoji: true },
+          action_id: 'edit_rotation',
+          value: name,
+        },
       });
 
       if (members.length > 0) {
@@ -145,13 +151,6 @@ async function buildRotationsViewBlocks(bot, channel) {
         blocks.push({ type: 'section', text: { type: 'mrkdwn', text: '_This rotation has no members._' } });
       }
 
-      blocks.push({
-        type: 'actions',
-        elements: [
-          { type: 'button', text: { type: 'plain_text', text: 'Edit' }, action_id: 'edit_rotation', value: name },
-          { type: 'button', text: { type: 'plain_text', text: 'Delete' }, action_id: 'delete_rotation_start', value: name, style: 'danger' },
-        ],
-      });
       blocks.push({ type: 'divider' });
     }
   } else {

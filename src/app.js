@@ -34,7 +34,7 @@ const { startHttpServer, setupGracefulShutdown } = require('./bot/lifecycle');
 const { startPick, scheduleAll, performRotationDailyReset } = require('./bot/pickLifecycle');
 const { cleanupRotationData, renameRotationData }           = require('./bot/rotationData');
 const { openSelectModal, openNewRotationModal, buildNewRotationViewForBot, buildRotationsViewBlocks, buildRotationsView } = require('./bot/modalBuilders');
-const { handleHelpCommand, handleStatusCommand, handleResetCommand, handlePickCommand } = require('./commands/adminCommands');
+const { handleHelpCommand, handleStatusCommand, handleResetCommand, handlePickCommand, handleMeCommand } = require('./commands/adminCommands');
 const { handleRestoreBackupCommand, handleDeleteBackupCommand, handleDeleteBackupConfirm, handleKillKillKillCommand } = require('./commands/backupCommands');
 const { openLeaveModal, handleLeaveAddOpen, handleLeaveAddSubmit, handleLeaveRemove } = require('./handlers/leaveHandlers');
 
@@ -122,6 +122,10 @@ class DillBot {
     this.app.action('accept',               handlers.handleAcceptAction.bind(handlers));
     this.app.action('skip',                 handlers.handleSkipAction.bind(handlers));
     this.app.action('future_skip',          handlers.handleFutureSkipAction.bind(handlers));
+    this.app.action('danger_delete',        handlers.handleDangerDeleteAction.bind(handlers));
+    this.app.action('danger_force_pick',    handlers.handleDangerForcePickAction.bind(handlers));
+    this.app.action('danger_reset',         handlers.handleDangerResetAction.bind(handlers));
+    this.app.view('dill_action_complete',   async ({ ack }) => { await ack(); });
 
     // ── Leave actions / views ──────────────────────────────────────────────
     // Both tab buttons use views.update to swap the modal content in place,
@@ -159,6 +163,8 @@ class DillBot {
 
     try {
       switch (subcommand.toLowerCase()) {
+        case '':               return this.openSelectModal(client, body.trigger_id, channel);
+        case 'me':             return handleMeCommand(this, client, body, channel);
         case 'help':           return handleHelpCommand(this, client, body, channel);
         case 'status':         return handleStatusCommand(this, client, body, channel);
         case 'reset':          return handleResetCommand(this, client, body, channel, args);
@@ -166,13 +172,12 @@ class DillBot {
         case 'restore-backup': return handleRestoreBackupCommand(this, client, body, channel);
         case 'delete-backup':  return handleDeleteBackupCommand(this, client, body, channel);
         case 'kill-kill-kill': return handleKillKillKillCommand(this, client, body, channel, args);
-        default: {
-          const text = (command.text || '').trim();
-          if (text) {
-            return this.openNewRotationModal(client, body.trigger_id, channel, text);
-          }
-          return this.openSelectModal(client, body.trigger_id, channel);
-        }
+        default:
+          return client.chat.postEphemeral({
+            channel,
+            user: body.user_id,
+            text: `Command not recognised. Try \`/dill help\` to see available commands.`,
+          });
       }
     } catch (error) {
       console.error('[ERROR] Slash command failed:', error);

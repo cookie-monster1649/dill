@@ -291,6 +291,60 @@ function buildNewRotationView(channel, preName = '', existingConfig = null, time
           ];
         }),
       ] : []),
+
+      // Danger Zone — only shown when editing an existing rotation
+      ...(preName ? [
+        { type: 'divider' },
+        { type: 'header', text: { type: 'plain_text', text: 'Danger Zone' } },
+        {
+          type: 'context',
+          elements: [{ type: 'mrkdwn', text: '_These actions are permanent and cannot be undone._' }],
+        },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              style: 'danger',
+              action_id: 'danger_delete',
+              text: { type: 'plain_text', text: 'Delete Rotation' },
+              confirm: {
+                title: { type: 'plain_text', text: 'Delete rotation?' },
+                text: { type: 'mrkdwn', text: `Are you sure you want to delete *${preName}*? This cannot be undone.` },
+                confirm: { type: 'plain_text', text: 'Delete' },
+                deny: { type: 'plain_text', text: 'Cancel' },
+                style: 'danger',
+              },
+            },
+            {
+              type: 'button',
+              style: 'danger',
+              action_id: 'danger_force_pick',
+              text: { type: 'plain_text', text: 'Force Pick Today' },
+              confirm: {
+                title: { type: 'plain_text', text: 'Force pick today?' },
+                text: { type: 'mrkdwn', text: `This will immediately trigger a pick for *${preName}*, regardless of its schedule.` },
+                confirm: { type: 'plain_text', text: 'Force Pick' },
+                deny: { type: 'plain_text', text: 'Cancel' },
+                style: 'danger',
+              },
+            },
+            {
+              type: 'button',
+              style: 'danger',
+              action_id: 'danger_reset',
+              text: { type: 'plain_text', text: 'Reset All History' },
+              confirm: {
+                title: { type: 'plain_text', text: 'Reset all history?' },
+                text: { type: 'mrkdwn', text: `This will clear all accepted dates and randomise the queue for *${preName}*. This cannot be undone.` },
+                confirm: { type: 'plain_text', text: 'Reset' },
+                deny: { type: 'plain_text', text: 'Cancel' },
+                style: 'danger',
+              },
+            },
+          ],
+        },
+      ] : []),
     ]
   };
 }

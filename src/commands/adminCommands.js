@@ -8,7 +8,7 @@
 
 const { DateTime } = require('luxon');
 const { getIsoDateTz } = require('../utils/dateHelpers');
-const { generateShuffledRotation } = require('../utils/rotationHelpers');
+const { compareByLastAccepted, generateShuffledRotation, getRotationSchedule, estimateNextPickDates } = require('../utils/rotationHelpers');
 const { normalizeRotationName } = require('../utils/rotationUtils');
 const { startPick } = require('../bot/pickLifecycle');
 
@@ -29,13 +29,11 @@ async function handleHelpCommand(bot, client, body, channel) {
   let text =
     '*Dill Bot Help*\n' +
     '• `/dill`: Opens the main interactive modal to view and manage all rotations.\n' +
+    '• `/dill me`: Shows your rotations and estimated next pick dates (only visible to you).\n' +
     '• `/dill help`: Displays this help message.\n' +
     '• `/dill pick [rotation-name]`: Manually triggers a pick from the specified rotation.\n' +
     '• `/dill reset [rotation-name]`: Resets and randomises a rotation\'s queue.\n' +
-    '• `/dill status`: Shows bot status and statistics.\n' +
-    '• `/dill restore-backup`: Restores all Dill data from the most recent Slack backup.\n' +
-    '• `/dill delete-backup`: Deletes all Dill backup messages from the backup channel.\n' +
-    '• `/dill kill-kill-kill`: *Danger zone!* Wipes all Dill data and backups.';
+    '• `/dill status`: Shows bot status and statistics.';
 
   if (rotationNames.length > 0) {
     text += '\n\n*Available rotations in this channel:*\n' +
@@ -205,4 +203,62 @@ async function handlePickCommand(bot, client, body, channel, args) {
   await startPick(bot, channel, matchKey);
 }
 
-module.exports = { handleHelpCommand, handleStatusCommand, handleResetCommand, handlePickCommand };
+// ── Me ────────────────────────────────────────────────────────────────────────
+
+/**
+ * Posts an ephemeral summary of the invoking user's rotations in the channel,
+ * including their estimated next pick date for each.
+ *
+ * @param {object} bot
+ * @param {object} client
+ * @param {object} body
+ * @param {string} channel
+ */
+async function handleMeCommand(bot, client, body, channel) {
+  const userId        = body.user_id;
+  const channelConfig = bot.configStore.get(channel) || {};
+
+  // Find valid rotations the user is a member of
+  const userRotations = Object.entries(channelConfig).filter(([, cfg]) =>
+    typeof cfg === 'object' && cfg !== null &&
+    Array.isArray(cfg.days) &&
+    Array.isArray(cfg.members) && cfg.members.includes(userId)
+  );
+
+  if (userRotations.length === 0) {
+    return client.chat.postEphemeral({
+      channel,
+      user: userId,
+      text: "You're not a member of any rotations in this channel.",
+    });
+  }
+
+  const blocks = [
+    { type: 'header', text: { type: 'plain_text', text: 'Your Rotations' } },
+    { type: 'context', elements: [{ type: 'mrkdwn', text: '_Estimated next pick dates for you in this channel._' }] },
+    { type: 'divider' },
+  ];
+
+  for (const [name, cfg] of userRotations) {
+    const members = cfg.members || [];
+    let schedule  = getRotationSchedule(bot.queueStore, channel, name, members);
+    schedule      = [...schedule].sort(compareByLastAccepted);
+
+    // Estimate for all members so we always find this user's slot regardless of queue position
+    const nextPickDates = estimateNextPickDates(schedule, cfg, bot.leaveStore, channel, members.length);
+    const userDate      = nextPickDates.get(userId);
+
+    const dateText = userDate
+      ? DateTime.fromISO(userDate).toFormat('ccc d LLLL')
+      : '—';
+
+    blocks.push({
+      type: 'section',
+      text: { type: 'mrkdwn', text: `*${name}*\nNext up: ${dateText}` },
+    });
+  }
+
+  await client.chat.postEphemeral({ channel, user: userId, blocks, text: 'Your rotations' });
+}
+
+module.exports = { handleHelpCommand, handleStatusCommand, handleResetCommand, handlePickCommand, handleMeCommand };

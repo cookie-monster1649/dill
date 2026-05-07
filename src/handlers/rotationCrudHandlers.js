@@ -4,8 +4,21 @@
 // These are triggered by button clicks and modal submissions from the Dill
 // rotations management modal.
 
-const { compareByLastAccepted } = require('../utils/rotationHelpers');
+const { compareByLastAccepted, generateShuffledRotation } = require('../utils/rotationHelpers');
+const { getIsoDateTz }          = require('../utils/dateHelpers');
+const { normalizeRotationName } = require('../utils/rotationUtils');
 const config                    = require('../../config');
+
+// Builds a minimal modal used to replace the edit view after a danger action completes.
+function _actionCompleteView(title, message) {
+  return {
+    type: 'modal',
+    callback_id: 'dill_action_complete',
+    title: { type: 'plain_text', text: title },
+    close: { type: 'plain_text', text: 'Close' },
+    blocks: [{ type: 'section', text: { type: 'mrkdwn', text: message } }],
+  };
+}
 
 class RotationCrudHandlers {
   /**
@@ -306,6 +319,91 @@ class RotationCrudHandlers {
       } catch (notifyError) {
         console.error('[ERROR] Failed to notify user of modal error:', notifyError);
       }
+    }
+  }
+
+  // ── Danger Zone actions ───────────────────────────────────────────────────────
+
+  /**
+   * Handles the Danger Zone "Delete Rotation" button.
+   * Deletes the rotation and replaces the edit modal with a confirmation message.
+   */
+  async handleDangerDeleteAction({ ack, body, client }) {
+    await ack();
+    try {
+      const { channel, editingName } = JSON.parse(body.view.private_metadata);
+
+      this.bot.cleanupRotationData(channel, editingName);
+      await this.bot.createBackup();
+
+      await client.views.update({
+        view_id: body.view.id,
+        view: _actionCompleteView('Rotation Deleted', `*${editingName}* has been deleted.`),
+      });
+      await this._refreshOverviewModal(client, body.view.root_view_id, channel);
+    } catch (error) {
+      console.error('[ERROR] Danger delete failed:', error);
+    }
+  }
+
+  /**
+   * Handles the Danger Zone "Force Pick Today" button.
+   * Triggers an immediate pick for this rotation, subject to the duplicate-pick guard.
+   */
+  async handleDangerForcePickAction({ ack, body, client }) {
+    await ack();
+    try {
+      const { channel, editingName } = JSON.parse(body.view.private_metadata);
+      const cfg       = this.bot.configStore.getItem(channel, editingName);
+      const todayISO  = getIsoDateTz(new Date(), cfg?.tz);
+      const todayEvents = this.bot.analyticsService.analyticsStore.getItem('events', todayISO) || [];
+      const alreadyAccepted = todayEvents.some(
+        e => e.type === 'pick_accepted'
+          && e.data.channelId === channel
+          && normalizeRotationName(e.data.name) === normalizeRotationName(editingName)
+      );
+
+      if (alreadyAccepted) {
+        await client.views.update({
+          view_id: body.view.id,
+          view: _actionCompleteView('Already Picked Today', `A pick for *${editingName}* was already accepted today.`),
+        });
+        return;
+      }
+
+      await client.views.update({
+        view_id: body.view.id,
+        view: _actionCompleteView('Pick Triggered', `Forcing a pick for *${editingName}*…`),
+      });
+      await this.bot.startPick(channel, editingName);
+    } catch (error) {
+      console.error('[ERROR] Danger force pick failed:', error);
+    }
+  }
+
+  /**
+   * Handles the Danger Zone "Reset All History" button.
+   * Clears all accepted dates and randomises the queue.
+   */
+  async handleDangerResetAction({ ack, body, client }) {
+    await ack();
+    try {
+      const { channel, editingName } = JSON.parse(body.view.private_metadata);
+      const cfg     = this.bot.configStore.getItem(channel, editingName);
+      const members = cfg?.members || [];
+
+      const newQueue = generateShuffledRotation(members);
+      this.bot.queueStore.setItem(channel, editingName, newQueue);
+      this.bot.queueStore.save();
+      await this.bot.createBackup();
+
+      await client.views.update({
+        view_id: body.view.id,
+        view: _actionCompleteView('Queue Reset', `*${editingName}* has been reset and randomised.`),
+      });
+      await this._refreshOverviewModal(client, body.view.root_view_id, channel);
+    } catch (error) {
+      console.error('[ERROR] Danger reset failed:', error);
     }
   }
 }

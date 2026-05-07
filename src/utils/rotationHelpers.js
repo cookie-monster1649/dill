@@ -350,7 +350,7 @@ function estimateNextPickDates(schedule, config, leaveStore, channel, limit = 3)
   const tz        = config.tz || 'UTC';
   const today     = DateTime.now().setZone(tz);
   const todayIso  = today.toISODate();
-  let   pickDates = generateUpcomingPickDates(config, today, 180);
+  let   pickDates = generateUpcomingPickDates(config, today, 365);
 
   // If any member accepted today, that pick is already consumed — exclude today
   // so the simulation doesn't show it as an upcoming slot.

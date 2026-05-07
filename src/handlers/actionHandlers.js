@@ -35,6 +35,11 @@ class ActionHandlers {
   handleEditRotationAction(p)             { return this._crud.handleEditRotationAction(p); }
   handleDeleteStartAction(p)              { return this._crud.handleDeleteStartAction(p); }
 
+  // ── Danger Zone actions ──────────────────────────────────────────────────────
+  handleDangerDeleteAction(p)             { return this._crud.handleDangerDeleteAction(p); }
+  handleDangerForcePickAction(p)          { return this._crud.handleDangerForcePickAction(p); }
+  handleDangerResetAction(p)             { return this._crud.handleDangerResetAction(p); }
+
   // ── View submissions ─────────────────────────────────────────────────────────
   handleViewSubmission(p)                 { return this._crud.handleViewSubmission(p); }
   handleRotationFormSubmission(p)         { return this._crud.handleRotationFormSubmission(p); }
