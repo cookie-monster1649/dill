@@ -43,18 +43,6 @@ class PersistentStorageService {
   createDatabaseDump() {
     const timestamp = new Date().toISOString();
     const rotations = this.stores.queueStore.data || {};
-
-    // Log queue state for debugging
-    for (const channelId in rotations) {
-      for (const name in rotations[channelId]) {
-        const schedule = rotations[channelId][name];
-        if (Array.isArray(schedule) && schedule.length > 0) {
-          const firstUser = schedule[0];
-          console.log(`[DEBUG dump] ${name}: front=${firstUser.user}, lastAccepted=${firstUser.lastAcceptedDate}`);
-        }
-      }
-    }
-
     const dump = {
       version: '1.0',
       timestamp: timestamp,
@@ -226,11 +214,29 @@ class PersistentStorageService {
 
       // Encode as base64 for Slack
       const b64 = payloadBuffer.toString('base64');
-      // Compose blocks: summary, then compressed backup as code block
+
+      // Slack has a 3001 character limit per text block. Split the base64 data
+      // across multiple blocks to stay within limits (each chunk gets wrapped in ```)
+      const chunkSize = 2900;
+      const chunks = [];
+      for (let i = 0; i < b64.length; i += chunkSize) {
+        chunks.push(b64.slice(i, i + chunkSize));
+      }
+
+      // Compose blocks: summary, then compressed backup split across chunks
       const blocks = [
-        { type: "section", text: { type: "mrkdwn", text: `*Dill Bot Database Backup*\n${summary}` } },
-        { type: "section", text: { type: "mrkdwn", text: '```' + b64 + '```' } }
+        { type: "section", text: { type: "mrkdwn", text: `*Dill Bot Database Backup*\n${summary}` } }
       ];
+
+      // Add data chunks, each wrapped in a code block
+      // Each chunk wrapped in backticks, no header prefix – detection logic relies
+      // on blocks[1] starting with ``` to identify backup messages.
+      chunks.forEach((chunk) => {
+        blocks.push({
+          type: "section",
+          text: { type: "mrkdwn", text: '```' + chunk + '```' }
+        });
+      });
 
       // Always find the most recent backup message in the channel
       let backupMsgTs = null;
@@ -308,7 +314,9 @@ class PersistentStorageService {
         console.log('[INFO] No previous database backups found in Slack channel');
         return null;
       }
-      // Find the most recent backup message with the expected format
+      // Find the most recent backup message with the expected format.
+      // conversations.history returns messages in reverse chronological order (newest first),
+      // so the first match is the most recent.
       let found = null;
       for (const msg of result.messages) {
         if (!msg.blocks || msg.blocks.length < 2) continue;
@@ -325,20 +333,31 @@ class PersistentStorageService {
           secondBlock.text.text.startsWith('```')
         ) {
           found = msg;
-          break;
+          break; // First match is the most recent
         }
       }
       if (!found) {
         console.log('[INFO] No valid database backup found in Slack channel');
         return null;
       }
-      // Extract the base64 code block from the second block
-      const b64Match = found.blocks[1].text.text.match(/```([\s\S]+?)```/);
-      if (!b64Match) {
+
+      // Extract base64 data from all blocks within this single backup message.
+      // Blocks are part of one message, so they're already consecutive.
+      let b64 = '';
+      for (let i = 1; i < found.blocks.length; i++) {
+        const block = found.blocks[i];
+        if (block.text && block.text.text) {
+          const match = block.text.text.match(/```([\s\S]+?)```/);
+          if (match) {
+            b64 += match[1].trim();
+          }
+        }
+      }
+
+      if (!b64) {
         console.warn('[WARN] Could not extract base64 data from backup message');
         return null;
       }
-      const b64 = b64Match[1].trim();
 
       // Decode from base64, then optionally decrypt, then brotli-decompress.
       // The key must match whatever was set when the backup was written.
@@ -430,18 +449,7 @@ class PersistentStorageService {
       }
 
       if (dump.data.rotations) {
-        console.log('[DEBUG] Restoring rotations from backup...');
-        const rotations = dump.data.rotations;
-        for (const channelId in rotations) {
-          for (const name in rotations[channelId]) {
-            const schedule = rotations[channelId][name];
-            if (Array.isArray(schedule) && schedule.length > 0) {
-              const firstUser = schedule[0];
-              console.log(`[DEBUG restore] ${name}: front=${firstUser.user}, lastAccepted=${firstUser.lastAcceptedDate}`);
-            }
-          }
-        }
-        this.stores.queueStore.data = rotations;
+        this.stores.queueStore.data = dump.data.rotations;
         this.stores.queueStore.save();
         console.log('[INFO] Restored rotations store');
       }

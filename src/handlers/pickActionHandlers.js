@@ -68,10 +68,7 @@ class PickActionHandlers {
     }, dateISO);
 
     // ── Update queue state ───────────────────────────────────────────────────
-    console.log(`[DEBUG] Before reorderAfterAccept – config tz: ${cfg.tz}, user: ${user}, schedule length:`, (this.bot.queueStore.getItem(channelId, name) || []).length);
     reorderAfterAccept(this.bot.queueStore, channelId, name, user, cfg);
-    const scheduleAfter = this.bot.queueStore.getItem(channelId, name) || [];
-    console.log(`[DEBUG] After reorderAfterAccept – schedule:`, JSON.stringify(scheduleAfter.slice(0, 2)));
 
     // ── Update the Slack message ─────────────────────────────────────────────
     const dateString = formatDateTz(date, cfg.tz);
@@ -120,10 +117,8 @@ class PickActionHandlers {
     const cfg = this.bot.configStore.getItem(channelId, name) || {};
 
     // ── Advance the queue ────────────────────────────────────────────────────
-    console.log(`[DEBUG skip] Before handleUserSkip – skippedUser: ${skippedUser}, schedule length:`, (this.bot.queueStore.getItem(channelId, name) || []).length);
     const nextTurn = handleUserSkip(this.bot.queueStore, channelId, name, skippedUser, cfg);
     const nextUser = nextTurn?.user;
-    console.log(`[DEBUG skip] After handleUserSkip – nextUser: ${nextUser}`);
 
     // ── Post a thread note then update the original message ──────────────────
     await client.chat.postMessage({

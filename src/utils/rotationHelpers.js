@@ -240,9 +240,6 @@ function reorderAfterAccept(queueStore, channel, name, acceptedUserId, config, r
   // Find the accepted user in the schedule
   const acceptedIndex = schedule.findIndex(t => t.user === acceptedUserId);
 
-  console.log(`[DEBUG reorderAfterAccept] channel=${channel}, name=${name}, acceptedUserId=${acceptedUserId}, scheduleLength=${schedule.length}, foundIndex=${acceptedIndex}, members=${members.length}`);
-  console.log(`[DEBUG reorderAfterAccept] First 3 in schedule:`, schedule.slice(0, 3).map(t => `${t.user}(${t.lastAcceptedDate})`).join(' → '));
-
   if (acceptedIndex !== -1) {
     // Update the user's last accepted date and reset skip status
     // Use timezone-aware date function to get the correct date in the rotation's timezone
@@ -251,11 +248,9 @@ function reorderAfterAccept(queueStore, channel, name, acceptedUserId, config, r
     schedule[acceptedIndex].lastAcceptedDate = dateToSet;
     schedule[acceptedIndex].isSkipped = false;
 
-    console.log(`[DEBUG reorderAfterAccept] Setting lastAcceptedDate to ${dateToSet} for user ${acceptedUserId}`);
-
     schedule.sort(compareByLastAccepted);
     persistSchedule(queueStore, channel, name, schedule);
-    console.log(`[INFO] Accepted pick for '${name}' - ${acceptedUserId} marked as accepted on ${dateToSet} (timezone: ${config.tz})`);
+    console.log(`[INFO] Accepted pick for '${name}' - ${acceptedUserId} marked as accepted on ${dateToSet} (timezone: ${config.tz || 'UTC'})`);
   } else {
     console.warn(`[WARN] Accepted user '${acceptedUserId}' not found in rotation '${name}'`);
   }
