@@ -42,6 +42,19 @@ class PersistentStorageService {
    */
   createDatabaseDump() {
     const timestamp = new Date().toISOString();
+    const rotations = this.stores.queueStore.data || {};
+
+    // Log queue state for debugging
+    for (const channelId in rotations) {
+      for (const name in rotations[channelId]) {
+        const schedule = rotations[channelId][name];
+        if (Array.isArray(schedule) && schedule.length > 0) {
+          const firstUser = schedule[0];
+          console.log(`[DEBUG dump] ${name}: front=${firstUser.user}, lastAccepted=${firstUser.lastAcceptedDate}`);
+        }
+      }
+    }
+
     const dump = {
       version: '1.0',
       timestamp: timestamp,
@@ -53,7 +66,7 @@ class PersistentStorageService {
       },
       data: {
         configs: this.stores.configStore.data || {},
-        rotations: this.stores.queueStore.data || {},
+        rotations: rotations,
         activestate: this.stores.stateStore.data || {},
         analytics: this.stores.analyticsService?.analyticsStore.data || {},
         leave: this.stores.leaveStore?.data || {}
@@ -417,7 +430,18 @@ class PersistentStorageService {
       }
 
       if (dump.data.rotations) {
-        this.stores.queueStore.data = dump.data.rotations;
+        console.log('[DEBUG] Restoring rotations from backup...');
+        const rotations = dump.data.rotations;
+        for (const channelId in rotations) {
+          for (const name in rotations[channelId]) {
+            const schedule = rotations[channelId][name];
+            if (Array.isArray(schedule) && schedule.length > 0) {
+              const firstUser = schedule[0];
+              console.log(`[DEBUG restore] ${name}: front=${firstUser.user}, lastAccepted=${firstUser.lastAcceptedDate}`);
+            }
+          }
+        }
+        this.stores.queueStore.data = rotations;
         this.stores.queueStore.save();
         console.log('[INFO] Restored rotations store');
       }
