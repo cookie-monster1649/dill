@@ -13,6 +13,7 @@ const { buildPickBlocks, extractRotationInfo } = require('../utils/slackHelpers'
 const { handleUserSkip, handleFutureSkip }     = require('../utils/rotationHelpers');
 const { reorderAfterAccept }                   = require('../utils/rotationHelpers');
 const { formatDateTz, getIsoDateTz }           = require('../utils/dateHelpers');
+const { isUserOnLeave }                        = require('../bot/leaveHelpers');
 const { DateTime }                             = require('luxon');
 const config                                   = require('../../config');
 
@@ -116,23 +117,48 @@ class PickActionHandlers {
 
     const cfg = this.bot.configStore.getItem(channelId, name) || {};
 
-    // ── Advance the queue ────────────────────────────────────────────────────
-    const nextTurn = handleUserSkip(this.bot.queueStore, channelId, name, skippedUser, cfg);
-    const nextUser = nextTurn?.user;
+    // ── Advance the queue, auto-skipping anyone currently on leave ──────────
+    // A manual skip can land the queue on a member who's on leave today;
+    // keep advancing until we reach someone available, capped at the member
+    // count so an all-on-leave rotation can't loop forever.
+    const pickDateIso  = DateTime.now().setZone(cfg.tz).toISODate();
+    const maxAutoSkips = (cfg.members || []).length;
+
+    let nextTurn      = handleUserSkip(this.bot.queueStore, channelId, name, skippedUser, cfg);
+    let autoSkipCount = 0;
+    while (
+      nextTurn &&
+      autoSkipCount < maxAutoSkips &&
+      isUserOnLeave(this.bot.leaveStore, channelId, nextTurn.user, pickDateIso)
+    ) {
+      console.log(`[INFO] Auto-skipping <@${nextTurn.user}> for '${name}' – on leave ${pickDateIso}`);
+      nextTurn = handleUserSkip(this.bot.queueStore, channelId, name, nextTurn.user, cfg);
+      autoSkipCount++;
+    }
+
+    // If everyone in the rotation is on leave, the loop above exhausts its
+    // budget with `nextTurn` still pointing at someone unavailable.
+    const allOnLeave = nextTurn && isUserOnLeave(this.bot.leaveStore, channelId, nextTurn.user, pickDateIso);
+    const nextUser   = allOnLeave ? null : nextTurn?.user;
 
     // ── Post a thread note then update the original message ──────────────────
+    const noteText = nextUser
+      ? `*${name}*: <@${responder}> skipped <@${skippedUser}>. Moving on to <@${nextUser}>.`
+      : `*${name}*: <@${responder}> skipped <@${skippedUser}>. Everyone else is on leave today – no pick this round.`;
     await client.chat.postMessage({
       channel:   channelId,
       thread_ts: messageTs,
-      text: `*${name}*: <@${responder}> skipped <@${skippedUser}>. Moving on to <@${nextUser}>.`
+      text: noteText
     });
 
     const now    = DateTime.now().setZone(cfg.tz);
-    const blocks = buildPickBlocks(name, nextUser, cfg.tz, now.toJSDate(), false);
+    const blocks = nextUser
+      ? buildPickBlocks(name, nextUser, cfg.tz, now.toJSDate(), false)
+      : [{ type: 'section', text: { type: 'mrkdwn', text: `*${name}*: :palm_tree: Everyone is on leave today – no pick this round.` } }];
     await client.chat.update({
       channel: channelId,
       ts:      messageTs,
-      text:    `Rotation pick for ${name}: <@${nextUser}>`,
+      text:    nextUser ? `Rotation pick for ${name}: <@${nextUser}>` : `Rotation pick for ${name}: everyone on leave today`,
       blocks
     });
 
