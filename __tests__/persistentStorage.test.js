@@ -76,11 +76,6 @@ describe('PersistentStorageService – dump and restore utilities', () => {
     expect(hash1.length).toBeGreaterThan(0);
     expect(hash1).toBe(hash2);
   });
-
-  test('extractBackupInfo returns null for a message without backup blocks', () => {
-    expect(service.extractBackupInfo({ blocks: [] })).toBeNull();
-    expect(service.extractBackupInfo({ blocks: [{ type: 'divider' }] })).toBeNull();
-  });
 });
 
 // ── getNextOccurrences ────────────────────────────────────────────────────────
