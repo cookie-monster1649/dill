@@ -7,6 +7,7 @@
 
 const { CronJob } = require('cron');
 const { DateTime } = require('luxon');
+const { isPickDay, weekInterval } = require('../utils/pickSchedule');
 
 /**
  * Service for managing scheduled rotation jobs.
@@ -80,42 +81,16 @@ class SchedulerService {
       }).join(',');
       
       const pickCronExpr = `${minute} ${hour} * * ${days}`;
-      const frequencyInterval = config.frequency === 'fortnightly' ? 2 :
-                               config.frequency === 'monthly'      ? 4 : 1;
-
-      // Pre-parse the rotation's start instant in its own timezone.
-      // Done outside the tick callback so the parse only happens once.
-      const startDt = config.startDate
-        ? DateTime.fromISO(config.startDate).setZone(config.tz)
-        : null;
-
+      // Cron fires on every configured day; the shared pick-schedule rules
+      // decide whether this week is a pick week (fortnightly / monthly)
       const onPickTick = () => {
-        // Weekly rotations always fire – no interval gate needed.
-        if (frequencyInterval === 1) {
-          onPickCallback(channel, name);
-          return;
-        }
+        const nowInZone = DateTime.now().setZone(config.tz);
+        if (!isPickDay(config, nowInZone)) return;
 
-        // Older configs may lack startDate. Rather than silently suppressing
-        // the pick via NaN arithmetic (the original bug), fall back to always
-        // firing and log a warning so the operator knows to re-save the config.
-        if (!startDt) {
-          console.warn(`[WARN] Rotation '${name}' has no startDate – firing pick unconditionally. Re-save the rotation to fix this.`);
-          onPickCallback(channel, name);
-          return;
+        if (weekInterval(config) > 1 && !config.anchorWeek) {
+          console.warn(`[WARN] Rotation '${name}' has no anchorWeek – firing pick unconditionally. Re-save the rotation to fix this.`);
         }
-
-        // Count whole weeks elapsed since startDate, evaluated in the rotation's
-        // timezone. Using an absolute diff avoids two bugs in the original code:
-        //   1. ISO week numbers reset to 1 each January, causing signed-modulo
-        //      to return -1 instead of 0 across year boundaries.
-        //   2. getWeekNumber(new Date()) used the server's UTC clock, which sits
-        //      in the previous ISO week for east-of-UTC zones at pick time.
-        const nowInZone    = DateTime.now().setZone(config.tz);
-        const weeksElapsed = Math.round(nowInZone.diff(startDt, 'weeks').weeks);
-        if (weeksElapsed % frequencyInterval === 0) {
-          onPickCallback(channel, name);
-        }
+        onPickCallback(channel, name);
       };
       
       pickJob = this.createCronJob(pickCronExpr, config.tz, onPickTick, `PICK job for ${name}`);

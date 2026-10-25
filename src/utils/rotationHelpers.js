@@ -1,6 +1,7 @@
 const { DateTime }      = require('luxon');
 const { getIsoDateTz } = require('./dateHelpers');
 const { isUserOnLeave } = require('../bot/leaveHelpers');
+const { upcomingPickTimes } = require('./pickSchedule');
 
 /**
  * @typedef {Object} Turn
@@ -284,50 +285,20 @@ function resetDailySkips(queueStore, channel, name, config) {
 // ── Next-pick estimation ──────────────────────────────────────────────────────
 
 /**
- * Generates upcoming pick dates for a rotation starting from a given day.
- * Mirrors the week-interval gate in SchedulerService so estimates match reality.
+ * Generates upcoming pick days for a rotation starting from a given day.
+ * Delegates to the shared pick-schedule rules so estimates match the
+ * scheduler exactly.
  *
  * Example output for a Mon/Wed weekly rotation starting from 2026-05-07:
  *   [DateTime(2026-05-11), DateTime(2026-05-13), DateTime(2026-05-18), ...]
  *
- * @param {object}   config   - Rotation config (days, frequency, tz, startDate)
+ * @param {object}   config   - Rotation config (days, time, frequency, tz, anchorWeek)
  * @param {DateTime} from     - Start date (Luxon DateTime in the rotation's timezone)
  * @param {number}   maxDays  - How many days ahead to search (default 180)
  * @returns {DateTime[]}
  */
 function generateUpcomingPickDates(config, from, maxDays = 180) {
-  // Scheduler dayMap: mon=1...sat=6, sun=0 (matches JS Date.getDay())
-  const dayMap   = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6, sun: 0 };
-  const pickDays = new Set((config.days || []).map(d => dayMap[d]));
-
-  const interval = config.frequency === 'fortnightly' ? 2 :
-                   config.frequency === 'monthly'      ? 4 : 1;
-
-  // Pre-parse startDate once — used for the week-interval gate
-  const startDt = config.startDate
-    ? DateTime.fromISO(config.startDate).setZone(config.tz || 'UTC')
-    : null;
-
-  const dates  = [];
-  let   cursor = from.startOf('day');
-  const end    = from.plus({ days: maxDays });
-
-  while (cursor <= end) {
-    // Luxon weekday: 1=Mon...6=Sat, 7=Sun → convert to JS-style (0=Sun)
-    const jsDay = cursor.weekday === 7 ? 0 : cursor.weekday;
-
-    if (pickDays.has(jsDay)) {
-      const fires = interval === 1 || !startDt
-        ? true
-        : Math.round(cursor.diff(startDt, 'weeks').weeks) % interval === 0;
-
-      if (fires) dates.push(cursor);
-    }
-
-    cursor = cursor.plus({ days: 1 });
-  }
-
-  return dates;
+  return upcomingPickTimes(config, from, maxDays).map(t => t.startOf('day'));
 }
 
 /**
