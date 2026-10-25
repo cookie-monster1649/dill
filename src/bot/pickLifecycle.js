@@ -15,6 +15,7 @@ const { normalizeRotationName } = require('../utils/rotationHelpers');
 const { isUserOnLeave } = require('./leaveHelpers');
 const { hasSpeakingOrder } = require('../utils/speakingOrderHelpers');
 const { recordSpeakingOrderPick, postSpeakingOrder } = require('./speakingOrderLifecycle');
+const { weekInterval, legacyAnchorWeek } = require('../utils/pickSchedule');
 
 // ── Pick Dispatch ─────────────────────────────────────────────────────────────
 
@@ -121,6 +122,8 @@ function scheduleAll(bot) {
   console.log('[INFO] Initialising rotation schedules...');
   bot.schedulerService.stopAllJobs();
 
+  migrateMissingAnchors(bot);
+
   const allChannels = bot.configStore.data || {};
   for (const channel of Object.keys(allChannels)) {
     const channelRotations = allChannels[channel] || {};
@@ -140,6 +143,37 @@ function scheduleAll(bot) {
   }
 
   console.log(`[INFO] Schedule initialisation complete – ${bot.schedulerService.getActiveJobCount()} jobs active`);
+}
+
+// ── Anchor Migration ──────────────────────────────────────────────────────────
+
+/**
+ * Gives every non-weekly rotation an anchorWeek. Rotations saved before
+ * anchors existed get one derived from the old startDate rule, so their next
+ * pick stays on the same date after upgrading.
+ *
+ * @param {object} bot - The DillBot instance
+ */
+function migrateMissingAnchors(bot) {
+  let changed = false;
+  const allChannels = bot.configStore.data || {};
+
+  for (const channel of Object.keys(allChannels)) {
+    for (const name of Object.keys(allChannels[channel] || {})) {
+      const cfg = bot.configStore.getItem(channel, name);
+      if (!cfg?.days || weekInterval(cfg) === 1 || cfg.anchorWeek) continue;
+
+      const anchorWeek = legacyAnchorWeek(cfg);
+      bot.configStore.setItem(channel, name, { ...cfg, anchorWeek });
+      console.log(`[INFO] Anchored '${name}' in ${channel} to week of ${anchorWeek}`);
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    bot.configStore.save();
+    bot.createBackup();
+  }
 }
 
 // ── Daily Reset ───────────────────────────────────────────────────────────────

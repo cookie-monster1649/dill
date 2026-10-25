@@ -8,6 +8,7 @@ const { compareByLastAccepted, generateShuffledRotation } = require('../utils/ro
 const { getIsoDateTz }          = require('../utils/dateHelpers');
 const { normalizeRotationName } = require('../utils/rotationHelpers');
 const { readSpeakingOrderFields } = require('../utils/speakingOrderModalBlocks');
+const { initialAnchorWeek }     = require('../utils/pickSchedule');
 const config                    = require('../../config');
 
 // Builds a minimal modal used to replace the edit view after a danger action completes.
@@ -209,6 +210,13 @@ class RotationCrudHandlers {
       ...speakingOrderFields,
       startDate: oldCfg?.startDate || new Date().toISOString()
     };
+
+    // Keep the existing fortnight/month phase on ordinary edits. Re-anchor
+    // when there is no anchor yet or the frequency changed, so the first pick
+    // is the next matching day rather than a surprise week later.
+    const keepAnchor = oldCfg?.anchorWeek && oldCfg.frequency === frequency;
+    newConfig.anchorWeek = keepAnchor ? oldCfg.anchorWeek : initialAnchorWeek(newConfig);
+    // e.g. { days: ['tue'], frequency: 'fortnightly', anchorWeek: '2026-11-02', ... }
     this.bot.configStore.setItem(channel, newName, newConfig);
 
     // ── Update queue ─────────────────────────────────────────────────────────

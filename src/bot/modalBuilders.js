@@ -11,6 +11,7 @@ const {
   estimateNextPickDates,
 } = require("../utils/rotationHelpers");
 const { isUserOnLeave } = require("./leaveHelpers");
+const { nextPickTime } = require("../utils/pickSchedule");
 const { DateTime } = require("luxon");
 
 // ── Main Overview Modal ───────────────────────────────────────────────────────
@@ -119,6 +120,26 @@ function buildNewRotationViewForBot(bot, channel, preName = "", overrides = null
   );
 }
 
+// ── Next Pick Line ────────────────────────────────────────────────────────────
+
+/**
+ * One-line summary of when the rotation next picks, so non-weekly rotations
+ * aren't a guessing game.
+ *
+ * Example text: "Next pick date is *Tue 3 November* at 10:00 (fortnightly)"
+ *
+ * @param {object} cfg - Rotation config
+ * @returns {object} Slack context block
+ */
+function buildNextPickBlock(cfg) {
+  const next = nextPickTime(cfg);
+  const text = next
+    ? `Next pick date is *${next.toFormat("ccc d LLLL")}* at ${next.toFormat("HH:mm")} (${cfg.frequency || "weekly"})`
+    : "_No upcoming pick scheduled – check the days and time in settings._";
+
+  return { type: "context", elements: [{ type: "mrkdwn", text }] };
+}
+
 // ── Rotation Overview Blocks ──────────────────────────────────────────────────
 
 /**
@@ -198,6 +219,8 @@ async function buildRotationsViewBlocks(bot, channel) {
           value: name,
         },
       });
+
+      blocks.push(buildNextPickBlock(cfg));
 
       if (members.length > 0) {
         try {
