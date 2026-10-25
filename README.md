@@ -92,6 +92,11 @@ Go to [api.slack.com/apps](https://api.slack.com/apps) and create a new app **fr
 | `channels:history` | Read backup channel history |
 | `groups:history` | Read backup channel history (private channels) |
 | `channels:join` | Join public channels when a pick is triggered |
+| `reactions:read` | Read :x: reactions on speaking-order lists |
+
+**Subscribe to bot events** under *Features → Event Subscriptions*: `reaction_added` and `reaction_removed` (used by speaking-order lists).
+
+Alternatively, paste [`slack-app-manifest.yml`](slack-app-manifest.yml) into *App Manifest* to configure all of the above in one go.
 
 **Install the app** to your workspace under *Settings → Install App*. Copy the **Bot Token** (`xoxb-…`) – this becomes your `SLACK_BOT_TOKEN`.
 
@@ -262,6 +267,19 @@ For each rotation, a ⚙️ settings button lets you manually set each member's 
 - Re-balancing after extended absences
 
 Members with no date set appear at the front of the queue (they go first).
+
+### Pick message notes
+
+Every rotation has an optional **Pick message notes** field. Whatever you write there (e.g. what to prepare, a Trello board link) is shown in each pick message.
+
+### Speaking order
+
+Tick **Post a speaking order list** on any rotation to post a shuffled, numbered list of members after each pick. For example, a fortnightly retro picks a facilitator on Tue and posts the speaking order on Wed.
+
+- **List day** – the list posts at the rotation's pick time on this day (default Wed), but only in a week with a pick, so it follows the rotation's frequency
+- **Leave** – members on leave that day are left off
+- **Opting out** – anyone who reacts :x: to the list is removed and the numbers close up. Removing the reaction puts them back in their original spot
+- **Post Speaking Order Now** – posts the list immediately, handy for testing
 
 ---
 
