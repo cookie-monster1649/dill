@@ -13,6 +13,8 @@ const { getIsoDateTz } = require('../utils/dateHelpers');
 const { peekNextUser, handleUserSkip, resetDailySkips } = require('../utils/rotationHelpers');
 const { normalizeRotationName } = require('../utils/rotationHelpers');
 const { isUserOnLeave } = require('./leaveHelpers');
+const { hasSpeakingOrder } = require('../utils/speakingOrderHelpers');
+const { recordSpeakingOrderPick, postSpeakingOrder } = require('./speakingOrderLifecycle');
 
 // ── Pick Dispatch ─────────────────────────────────────────────────────────────
 
@@ -83,7 +85,7 @@ async function startPick(bot, channel, name) {
 
   // ── Post the pick message ──
   const pickDate = DateTime.now().setZone(cfg.tz).toJSDate();
-  const blocks = buildPickBlocks(name, turn.user, cfg.tz, pickDate);
+  const blocks = buildPickBlocks(name, turn.user, cfg.tz, pickDate, cfg.pickNotes);
 
   // Join the channel first; this fails silently for DMs (expected)
   try {
@@ -98,6 +100,8 @@ async function startPick(bot, channel, name) {
       text: `A new rotation pick for ${name}`,
       blocks,
     });
+    // Starts the cycle so the speaking order posts on the following list day
+    if (hasSpeakingOrder(cfg)) recordSpeakingOrderPick(bot, channel, name, pickDateIso);
   } catch (error) {
     console.error(`[ERROR] Failed to post pick message for '${name}' in ${channel}:`, error);
   }
@@ -128,7 +132,8 @@ function scheduleAll(bot) {
           name,
           cfg,
           (ch, n) => startPick(bot, ch, n),
-          (ch, n, config) => performRotationDailyReset(bot, ch, n, config)
+          (ch, n, config) => performRotationDailyReset(bot, ch, n, config),
+          (ch, n) => postSpeakingOrder(bot, ch, n)
         );
       }
     }

@@ -7,6 +7,7 @@
 const { compareByLastAccepted, generateShuffledRotation } = require('../utils/rotationHelpers');
 const { getIsoDateTz }          = require('../utils/dateHelpers');
 const { normalizeRotationName } = require('../utils/rotationHelpers');
+const { readSpeakingOrderFields } = require('../utils/speakingOrderModalBlocks');
 const config                    = require('../../config');
 
 // Builds a minimal modal used to replace the edit view after a danger action completes.
@@ -72,6 +73,41 @@ class RotationCrudHandlers {
       await client.views.push({ trigger_id: body.trigger_id, view });
     } catch (error) {
       this._handleModalOpenError(error, body, client, 'editing the rotation');
+    }
+  }
+
+  /**
+   * Handles the speaking-order checkbox. Re-renders the form in place so its
+   * settings appear or disappear. Slack keeps the user's unsaved input
+   * because block and action IDs are unchanged.
+   */
+  async handleSpeakingOrderToggle({ ack, body, client }) {
+    await ack();
+    try {
+      const { channel, editingName } = JSON.parse(body.view.private_metadata);
+      const speakingOrder = (body.actions[0].selected_options || []).length > 0;
+
+      const view = this.bot.buildNewRotationView(channel, editingName, { speakingOrder });
+      await client.views.update({ view_id: body.view.id, hash: body.view.hash, view });
+    } catch (error) {
+      console.error('[ERROR] Failed to toggle speaking order:', error.data?.error || error.message);
+    }
+  }
+
+  /**
+   * Handles the "Post Speaking Order Now" button.
+   */
+  async handleSpeakingOrderPostAction({ ack, body, client }) {
+    await ack();
+    try {
+      const { channel, editingName } = JSON.parse(body.view.private_metadata);
+      await client.views.update({
+        view_id: body.view.id,
+        view: _actionCompleteView('Speaking Order', `Posting the speaking order for *${editingName}*…`),
+      });
+      await this.bot.postSpeakingOrder(channel, editingName, true);
+    } catch (error) {
+      console.error('[ERROR] Speaking order post failed:', error);
     }
   }
 
@@ -160,6 +196,7 @@ class RotationCrudHandlers {
     const time       = v.schedule_time.time_input.selected_time;
     const frequency  = v.frequency_block.frequency_select.selected_option?.value || 'weekly';
     const tzValue    = v.schedule_tz.tz_select.selected_option?.value || 'Etc/GMT+0';
+    const speakingOrderFields = readSpeakingOrderFields(v);
 
     const oldCfg     = this.bot.configStore.getItem(channel, editingName);
     const oldMembers = oldCfg?.members || [];
@@ -169,6 +206,7 @@ class RotationCrudHandlers {
     // ── Write config ─────────────────────────────────────────────────────────
     const newConfig = {
       days, time, members: newMembers, tz: tzValue, frequency,
+      ...speakingOrderFields,
       startDate: oldCfg?.startDate || new Date().toISOString()
     };
     this.bot.configStore.setItem(channel, newName, newConfig);

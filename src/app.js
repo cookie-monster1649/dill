@@ -7,6 +7,7 @@
 //   Slack connection/reconnection  →  src/bot/connection.js
 //   HTTP server + shutdown         →  src/bot/lifecycle.js
 //   Pick posting + scheduling      →  src/bot/pickLifecycle.js
+//   Speaking-order list            →  src/bot/speakingOrderLifecycle.js
 //   Rotation data (delete/rename)  →  src/bot/rotationData.js
 //   Modal building                 →  src/bot/modalBuilders.js
 //   /dill help|status|reset|pick   →  src/commands/adminCommands.js
@@ -33,6 +34,7 @@ const { setupSocketReceiver }    = require('./bot/connection');
 const { startHttpServer, setupGracefulShutdown } = require('./bot/lifecycle');
 const { startPick, scheduleAll, performRotationDailyReset } = require('./bot/pickLifecycle');
 const { cleanupRotationData, renameRotationData }           = require('./bot/rotationData');
+const { handleSpeakingOrderReaction, postSpeakingOrder }    = require('./bot/speakingOrderLifecycle');
 const { openSelectModal, openNewRotationModal, buildNewRotationViewForBot, buildRotationsViewBlocks, buildRotationsView } = require('./bot/modalBuilders');
 const { handleHelpCommand, handleStatusCommand, handleResetCommand, handlePickCommand, handleMeCommand } = require('./commands/adminCommands');
 const { handleRestoreBackupCommand, handleDeleteBackupCommand, handleDeleteBackupConfirm, handleKillKillKillCommand } = require('./commands/backupCommands');
@@ -125,7 +127,14 @@ class DillBot {
     this.app.action('danger_delete',        handlers.handleDangerDeleteAction.bind(handlers));
     this.app.action('danger_force_pick',    handlers.handleDangerForcePickAction.bind(handlers));
     this.app.action('danger_reset',         handlers.handleDangerResetAction.bind(handlers));
+    this.app.action('speaking_order_toggle', handlers.handleSpeakingOrderToggle.bind(handlers));
+    this.app.action('speaking_order_post',   handlers.handleSpeakingOrderPostAction.bind(handlers));
     this.app.view('dill_action_complete',   async ({ ack }) => { await ack(); });
+
+    // ── Speaking-order reactions ───────────────────────────────────────────
+    // ❌ on a speaking-order list removes the reacting person
+    this.app.event('reaction_added',   async ({ event }) => handleSpeakingOrderReaction(this, event, true));
+    this.app.event('reaction_removed', async ({ event }) => handleSpeakingOrderReaction(this, event, false));
 
     // ── Leave actions / views ──────────────────────────────────────────────
     // Both tab buttons use views.update to swap the modal content in place,
@@ -252,11 +261,12 @@ class DillBot {
   startPick(channel, name)                               { return startPick(this, channel, name); }
   scheduleAll()                                          { return scheduleAll(this); }
   performRotationDailyReset(channel, name, config)       { return performRotationDailyReset(this, channel, name, config); }
+  postSpeakingOrder(channel, name, force)                { return postSpeakingOrder(this, channel, name, force); }
   cleanupRotationData(channel, name)                     { return cleanupRotationData(this, channel, name); }
   renameRotationData(channel, oldName, newName)          { return renameRotationData(this, channel, oldName, newName); }
   openSelectModal(client, triggerId, channel)            { return openSelectModal(this, client, triggerId, channel); }
   openNewRotationModal(client, triggerId, channel, pre)  { return openNewRotationModal(this, client, triggerId, channel, pre); }
-  buildNewRotationView(channel, preName)                 { return buildNewRotationViewForBot(this, channel, preName); }
+  buildNewRotationView(channel, preName, overrides)      { return buildNewRotationViewForBot(this, channel, preName, overrides); }
   buildRotationsViewBlocks(channel)                      { return buildRotationsViewBlocks(this, channel); }
 
   // Forwarded to backupCommands so it can be bound as a Bolt view handler

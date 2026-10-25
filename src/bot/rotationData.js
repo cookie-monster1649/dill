@@ -5,6 +5,7 @@
 // which is why they live together rather than scattered across app.js.
 
 const { normalizeRotationName } = require('../utils/rotationHelpers');
+const { speakingOrderStateKey } = require('../utils/speakingOrderHelpers');
 
 // ── Deletion ──────────────────────────────────────────────────────────────────
 
@@ -25,8 +26,10 @@ function cleanupRotationData(bot, channel, name) {
 
   bot.configStore.deleteItem(channel, name);
   bot.queueStore.deleteItem(channel, name);
+  bot.stateStore.deleteItem(channel, speakingOrderStateKey(name));
   bot.configStore.save();
   bot.queueStore.save();
+  bot.stateStore.save();
 
   cleanupRotationAnalytics(bot, channel, name);
 
@@ -102,8 +105,16 @@ function renameRotationData(bot, channel, oldName, newName) {
     bot.queueStore.deleteItem(channel, oldName);
   }
 
+  // Speaking-order state follows the rotation so ❌ reactions keep working after rename
+  const oldListState = bot.stateStore.getItem(channel, speakingOrderStateKey(oldName));
+  if (oldListState) {
+    bot.stateStore.setItem(channel, speakingOrderStateKey(newName), oldListState);
+    bot.stateStore.deleteItem(channel, speakingOrderStateKey(oldName));
+  }
+
   bot.configStore.save();
   bot.queueStore.save();
+  bot.stateStore.save();
 
   renameRotationAnalytics(bot, channel, oldName, newName);
 

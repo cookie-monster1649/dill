@@ -153,7 +153,7 @@ class PickActionHandlers {
 
     const now    = DateTime.now().setZone(cfg.tz);
     const blocks = nextUser
-      ? buildPickBlocks(name, nextUser, cfg.tz, now.toJSDate(), false)
+      ? buildPickBlocks(name, nextUser, cfg.tz, now.toJSDate(), cfg.pickNotes)
       : [{ type: 'section', text: { type: 'mrkdwn', text: `*${name}*: :palm_tree: Everyone is on leave today – no pick this round.` } }];
     await client.chat.update({
       channel: channelId,

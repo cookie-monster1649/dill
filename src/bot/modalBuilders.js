@@ -93,10 +93,14 @@ async function openNewRotationModal(
  * @param {string} [preName='']
  * @returns {object} Slack view payload
  */
-function buildNewRotationViewForBot(bot, channel, preName = "") {
-  const existingConfig = preName
+function buildNewRotationViewForBot(bot, channel, preName = "", overrides = null) {
+  const storedConfig = preName
     ? bot.configStore.getItem(channel, preName)
     : null;
+  // Overrides let the modal re-render with unsaved changes (e.g. type switch)
+  const existingConfig = overrides
+    ? { ...(storedConfig || {}), ...overrides }
+    : storedConfig;
   const schedule =
     preName && existingConfig
       ? getRotationSchedule(

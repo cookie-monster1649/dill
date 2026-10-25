@@ -6,6 +6,7 @@
  */
 
 const { formatDateTz } = require('./dateHelpers');
+const { buildPickNotesBlock, buildSpeakingOrderSettingsBlocks } = require('./speakingOrderModalBlocks');
 
 /**
  * A hardened Slack API call wrapper with retry mechanism.
@@ -90,14 +91,14 @@ class RateLimiter {
  * @param {string} userId - The user ID selected for the pick
  * @param {string} tz - The timezone string
  * @param {Date} [pickDate] - The date of the pick (optional, defaults to now)
- * @param {boolean} [expired] - Whether the pick is expired (optional)
+ * @param {string} [notes] - Extra mrkdwn shown under the pick (rotation's pick notes)
  * @returns {Array} Array of Slack blocks for the message
  * 
  * @example
- * const blocks = buildPickBlocks('On-Call', 'U123', 'Etc/GMT-5', new Date(), false);
+ * const blocks = buildPickBlocks('On-Call', 'U123', 'Etc/GMT-5', new Date());
  * // Returns blocks for a message with Accept/Skip buttons
  */
-function buildPickBlocks(rotationName, userId, tz, pickDate = new Date()) {
+function buildPickBlocks(rotationName, userId, tz, pickDate = new Date(), notes = '') {
   const dateString = formatDateTz(pickDate, tz);
   const text = `*${rotationName}*: It's your turn, <@${userId}>!\n*Date*: ${dateString}`;
   const blocks = [
@@ -105,6 +106,8 @@ function buildPickBlocks(rotationName, userId, tz, pickDate = new Date()) {
       type: 'section', 
       text: { type: 'mrkdwn', text } 
     },
+    // Optional per-rotation notes (e.g. what to prepare, a Trello link)
+    ...(notes ? [{ type: 'section', text: { type: 'mrkdwn', text: notes } }] : []),
     {
       type: 'actions',
       block_id: `dill_confirm::${rotationName}`,
@@ -204,6 +207,9 @@ function buildNewRotationView(channel, preName = '', existingConfig = null, time
         } 
       },
       
+      // Notes shown in every pick message
+      buildPickNotesBlock(existingConfig),
+
       { type: 'divider' },
       { type: 'header', text: { type: 'plain_text', text: 'Schedule' } },
       
@@ -260,6 +266,8 @@ function buildNewRotationView(channel, preName = '', existingConfig = null, time
           options: timezoneOptions
         }
       },
+
+      ...buildSpeakingOrderSettingsBlocks(existingConfig, preName),
 
       // Last accepted dates — only shown when editing an existing rotation.
       // Each member gets a mrkdwn section (renders the @mention) paired with an

@@ -33,6 +33,8 @@ class ActionHandlers {
   // ── Rotation CRUD actions ────────────────────────────────────────────────────
   handleCreateNewAction(p)                { return this._crud.handleCreateNewAction(p); }
   handleEditRotationAction(p)             { return this._crud.handleEditRotationAction(p); }
+  handleSpeakingOrderToggle(p)            { return this._crud.handleSpeakingOrderToggle(p); }
+  handleSpeakingOrderPostAction(p)        { return this._crud.handleSpeakingOrderPostAction(p); }
   handleDeleteStartAction(p)              { return this._crud.handleDeleteStartAction(p); }
 
   // ── Danger Zone actions ──────────────────────────────────────────────────────

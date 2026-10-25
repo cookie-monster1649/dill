@@ -8,6 +8,14 @@
 const { CronJob } = require('cron');
 const { DateTime } = require('luxon');
 
+// Cron day-of-week numbers keyed by the day values stored in rotation configs
+const DAY_TO_CRON = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6, sun: 0 };
+
+// Stops every job held for one rotation (pick, daily reset, speaking order)
+function stopJobSet(jobSet) {
+  Object.values(jobSet).forEach(job => job?.stop());
+}
+
 /**
  * Service for managing scheduled rotation jobs.
  */
@@ -56,28 +64,25 @@ class SchedulerService {
    * @param {object} config - The rotation configuration
    * @param {Function} onPickCallback - Function to call when pick should be triggered
    * @param {Function} onDailyResetCallback - Function to call for daily reset in this rotation's timezone
+   * @param {Function} [onSpeakingOrderCallback] - Posts the speaking-order list on config.speakingOrderDay, if enabled
    */
-  scheduleJob(channel, name, config, onPickCallback, onDailyResetCallback) {
+  scheduleJob(channel, name, config, onPickCallback, onDailyResetCallback, onSpeakingOrderCallback) {
     const jobKey = `${channel}:${name}`;
     
     // Stop existing job if it exists
     if (this.scheduledJobs.has(jobKey)) {
-      const { pickJob, dailyResetJob } = this.scheduledJobs.get(jobKey);
-      if (pickJob) pickJob.stop();
-      if (dailyResetJob) dailyResetJob.stop();
+      stopJobSet(this.scheduledJobs.get(jobKey));
       this.scheduledJobs.delete(jobKey);
     }
     
     let pickJob = null;
     let dailyResetJob = null;
+    let speakingOrderJob = null;
     
     // Only schedule if we have the required configuration
     if (config.days?.length > 0 && config.time && config.tz) {
       const [hour, minute] = config.time.split(':');
-      const days = config.days.map(d => {
-        const dayMap = { mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6, sun: 0 };
-        return dayMap[d];
-      }).join(',');
+      const days = config.days.map(d => DAY_TO_CRON[d]).join(',');
       
       const pickCronExpr = `${minute} ${hour} * * ${days}`;
       const frequencyInterval = config.frequency === 'fortnightly' ? 2 :
@@ -133,11 +138,26 @@ class SchedulerService {
           `Daily reset for ${name}`
         );
       }
+
+      // ── Speaking-order job ──
+      // Fires weekly on the list day; the callback itself decides whether
+      // this is a pick week by checking for a recent pick.
+      // That avoids re-deriving the fortnight here, where rounding of
+      // weeksElapsed can disagree between Tuesday and Wednesday.
+      if (config.speakingOrder && config.speakingOrderDay && onSpeakingOrderCallback) {
+        const listDay = DAY_TO_CRON[config.speakingOrderDay];
+        speakingOrderJob = this.createCronJob(
+          `${minute} ${hour} * * ${listDay}`,
+          config.tz,
+          () => onSpeakingOrderCallback(channel, name),
+          `Speaking order job for ${name}`
+        );
+      }
     }
     
     // Store the jobs if they were created successfully
-    if (pickJob || dailyResetJob) {
-      this.scheduledJobs.set(jobKey, { pickJob, dailyResetJob });
+    if (pickJob || dailyResetJob || speakingOrderJob) {
+      this.scheduledJobs.set(jobKey, { pickJob, dailyResetJob, speakingOrderJob });
     }
   }
 
@@ -150,9 +170,7 @@ class SchedulerService {
   stopJob(channel, name) {
     const jobKey = `${channel}:${name}`;
     if (this.scheduledJobs.has(jobKey)) {
-      const { pickJob, dailyResetJob } = this.scheduledJobs.get(jobKey);
-      if (pickJob) pickJob.stop();
-      if (dailyResetJob) dailyResetJob.stop();
+      stopJobSet(this.scheduledJobs.get(jobKey));
       this.scheduledJobs.delete(jobKey);
       console.log(`[INFO] Stopped job for ${name} in ${channel}`);
     }
@@ -162,10 +180,7 @@ class SchedulerService {
    * Stops all scheduled jobs.
    */
   stopAllJobs() {
-    this.scheduledJobs.forEach(({ pickJob, dailyResetJob }, jobKey) => {
-      if (pickJob) pickJob.stop();
-      if (dailyResetJob) dailyResetJob.stop();
-    });
+    this.scheduledJobs.forEach(stopJobSet);
     this.scheduledJobs.clear();
     console.log('[INFO] Stopped all scheduled jobs');
   }
