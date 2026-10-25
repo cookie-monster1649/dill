@@ -83,20 +83,21 @@ Go to [api.slack.com/apps](https://api.slack.com/apps) and create a new app **fr
 
 | Scope | Purpose |
 |-------|---------|
-| `chat:write` | Post and update rotation messages |
-| `chat:delete` | Remove old backup messages |
+| `chat:write` | Post, update and delete Dill's own messages (including old backups) |
 | `commands` | Register the `/dill` slash command |
 | `users:read` | Resolve member display names |
 | `channels:read` | Read public channel info |
 | `groups:read` | Read private channel info |
 | `channels:history` | Read backup channel history |
 | `groups:history` | Read backup channel history (private channels) |
+| `chat:write.public` | Post in public channels Dill hasn't joined |
+| `groups:write` | Manage private channels Dill is in |
 | `channels:join` | Join public channels when a pick is triggered |
 | `reactions:read` | Read :x: reactions on speaking-order lists |
 
 **Subscribe to bot events** under *Features → Event Subscriptions*: `reaction_added` and `reaction_removed` (used by speaking-order lists).
 
-Alternatively, paste [`slack-app-manifest.yml`](slack-app-manifest.yml) into *App Manifest* to configure all of the above in one go.
+Alternatively, paste [`slack-app-manifest.json`](slack-app-manifest.json) into *App Manifest* to configure all of the above in one go.
 
 **Install the app** to your workspace under *Settings → Install App*. Copy the **Bot Token** (`xoxb-…`) – this becomes your `SLACK_BOT_TOKEN`.
 
