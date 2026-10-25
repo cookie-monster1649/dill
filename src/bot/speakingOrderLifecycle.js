@@ -83,6 +83,14 @@ async function postSpeakingOrder(bot, channel, name, force = false) {
   );
   const list = { date: todayIso, order, removed: [] };
 
+  // Join first: chat:write.public lets Dill post without being a member, but
+  // Slack only sends reaction events for channels the bot has joined
+  try {
+    await bot.app.client.conversations.join({ channel });
+  } catch (e) {
+    console.warn(`[WARN] Could not join channel ${channel}: ${e.data?.error || e.message}`);
+  }
+
   try {
     const result = await slackApiCall(bot.app.client.chat.postMessage, {
       channel,
