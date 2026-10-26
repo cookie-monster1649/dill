@@ -55,7 +55,7 @@ function dm(bot, userId, text) {
 
 /**
  * Responds to banter aimed at Dill: ❤️ for praise, 😢 for "bad bot", and a
- * suspicious question for anything really rude. A failed reaction is only
+ * threatened trip to HR for anything really rude. A failed reaction is only
  * logged – a missing emoji isn't worth an error DM.
  */
 async function respondToBanter(bot, message, kind) {

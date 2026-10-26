@@ -1,5 +1,5 @@
 // Tests for spotting banter aimed at Dill in DMs: praise (❤️), mild
-// insults (😢) and outright rudeness ("Is this Alex?").
+// insults (😢) and outright rudeness ("I'm going to report this to HR. BRB").
 
 const { classifyBanter } = require('../src/utils/banter');
 

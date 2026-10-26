@@ -9,13 +9,13 @@
 const BANTER = Object.freeze({
   LOVE: 'love', // "thanks", "good bot"  → ❤️ reaction
   SAD: 'sad',   // "bad bot", "dumb dill" → 😢 reaction
-  RUDE: 'rude', // swearing at Dill      → "Is this Alex?"
+  RUDE: 'rude', // swearing at Dill      → "I'm going to report this to HR. BRB"
 });
 
 // Slack reaction names (no colons)
 const REACTIONS = Object.freeze({ [BANTER.LOVE]: 'heart', [BANTER.SAD]: 'cry' });
 
-const RUDE_REPLY = 'Is this Alex?';
+const RUDE_REPLY = "I'm going to report this to HR. BRB";
 
 // Longer messages are probably real questions that happen to contain these
 const MAX_WORDS = 8;

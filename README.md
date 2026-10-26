@@ -299,7 +299,7 @@ Async standups in the style of Geekbot. Open `/dill` in the channel where answer
 - **Replies** – in one-message-per-person mode, the first reply from someone else under a person's post makes Dill reply "Summoning @person :wand:", since Slack doesn't notify them about replies to a post Dill made for them
 - **Say something else** – the "Thanks!" DM also has a **Say something else** button that asks "Anything else?" and adds the reply to the end of the post. Adding again appends; **Edit answers** can change or clear it
 - **Non-answers** – answers like "no", "nope", "n/a", "skip" or "no blockers" are left out of the channel post (the person's DM summary still shows them, marked as not posted). Longer answers such as "No, but the deploy is stuck" are kept
-- **Banter** – outside a survey, short DMs to Dill get a response: "thanks" or "good bot" gets :heart:, "bad bot" gets :cry:, and anything really rude gets "Is this Alex?"
+- **Banter** – outside a survey, short DMs to Dill get a response: "thanks" or "good bot" gets :heart:, "bad bot" gets :cry:, and anything really rude gets "I'm going to report this to HR. BRB"
 - **Editing** – edit any of your DM replies in Slack and the change is used, whether you're still answering or already posted. The "Thanks!" DM also has an **Edit answers** button. Either way the channel post updates in place
 - **Reminders** – optionally, anyone who hasn't finished by the reminder time (again in their own timezone) gets one follow-up DM that repeats the question they're on
 - **Leave** – people on leave in that channel aren't sent the survey
