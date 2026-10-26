@@ -15,6 +15,7 @@ const {
   askCurrentQuestion,
 } = require('../bot/surveyLifecycle');
 const { postCompletedSurvey, recordDoneMessage } = require('../bot/surveyPosting');
+const { LOVE_REACTION, isGratitude } = require('../utils/gratitude');
 
 // ── Filtering ─────────────────────────────────────────────────────────────────
 
@@ -36,6 +37,15 @@ function dm(bot, userId, text) {
   return slackApiCall(bot.app.client.chat.postMessage, { channel: userId, text });
 }
 
+// A failed reaction is only logged – a missing heart isn't worth an error DM
+async function reactWithLove(bot, message) {
+  try {
+    await bot.app.client.reactions.add({ channel: message.channel, timestamp: message.ts, name: LOVE_REACTION });
+  } catch (error) {
+    console.warn(`[WARN] Could not react to thanks from ${message.user}: ${error.data?.error || error.message}`);
+  }
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 /**
@@ -50,6 +60,9 @@ async function handleSurveyDm(bot, { message }) {
   const state = getPersonState(bot, userId);
 
   if (!state?.active) {
+    // "thanks" / "good bot" gets a ❤️ rather than the "no survey" reply.
+    // Only when idle – mid-survey every message is an answer.
+    if (isGratitude(message.text)) return reactWithLove(bot, message);
     await dm(bot, userId, buildIdleText());
     return;
   }

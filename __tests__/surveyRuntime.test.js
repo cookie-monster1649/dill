@@ -26,6 +26,7 @@ function makeBot(postMode = 'thread') {
   const client = {
     users: { info: jest.fn(async ({ user }) => ({ user: { tz: TZ[user], real_name: `Name ${user}`, profile: { image_72: `https://img/${user}.png` } } })) },
     views: { open: jest.fn(async () => ({})) },
+    reactions: { add: jest.fn(async () => ({})) },
     chat: {
       postMessage: jest.fn(async ({ channel }) => ({ ts: `${++ts}.000`, channel })),
       update: jest.fn(async () => ({})),
@@ -111,6 +112,21 @@ describe('handleSurveyDm', () => {
     const bot = makeBot();
     await reply(bot, 'U1', 'hello?');
     expect(sentTo(bot, 'U1')[0].text).toContain("don't have a survey");
+  });
+
+  test('hearts a thank-you when idle instead of replying', async () => {
+    const bot = makeBot();
+    await handleSurveyDm(bot, { message: { channel_type: 'im', channel: 'D1', ts: '9.000', user: 'U1', text: 'good bot!' } });
+    expect(bot.app.client.reactions.add).toHaveBeenCalledWith({ channel: 'D1', timestamp: '9.000', name: 'heart' });
+    expect(bot.app.client.chat.postMessage).not.toHaveBeenCalled();
+  });
+
+  test('treats "thanks" as an answer mid-survey', async () => {
+    const bot = makeBot();
+    await surveyTick(bot);
+    await reply(bot, 'U1', 'thanks');
+    expect(bot.app.client.reactions.add).not.toHaveBeenCalled();
+    expect(bot.surveyStateStore.getItem('people', 'U1').active.answers).toEqual(['thanks']);
   });
 
   test('ignores edits and bot messages', async () => {
