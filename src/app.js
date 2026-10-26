@@ -255,14 +255,36 @@ class DillBot {
     }
   }
 
-  async createBackup() {
-    if (this.persistentStorageService) {
+  /**
+   * Backs up all stores to Slack. Calls are coalesced: if a backup is
+   * already running, one more runs straight after it (capturing every change
+   * made meanwhile) and all waiting callers share it. Without this, two
+   * overlapping backups could finish out of order and leave an older
+   * snapshot as the latest – which is what gets restored after a restart.
+   */
+  createBackup() {
+    if (!this.persistentStorageService) return Promise.resolve();
+    if (this._pendingBackup) return this._pendingBackup;
+
+    const runBackup = async () => {
       try {
         await this.persistentStorageService.createBackup();
       } catch (error) {
         console.error('[ERROR] Failed to create backup:', error);
       }
-    }
+    };
+
+    // Queue behind the running backup (if any); later callers join this one
+    const pending = (this._runningBackup || Promise.resolve()).then(() => {
+      this._pendingBackup = null;
+      this._runningBackup = runBackup().finally(() => {
+        if (this._runningBackup === running) this._runningBackup = null;
+      });
+      const running = this._runningBackup;
+      return running;
+    });
+    this._pendingBackup = pending;
+    return pending;
   }
 
   // ── Startup ──────────────────────────────────────────────────────────────────

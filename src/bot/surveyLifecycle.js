@@ -53,7 +53,8 @@ const profileCache = new Map();
 
 /**
  * Looks up the parts of a person's Slack profile surveys need, cached.
- * Returns {} on failure, which callers treat as "UTC, post as Dill".
+ * Returns null if Slack couldn't be asked and nothing is cached, so callers
+ * can wait rather than guess. A missing tz on a real profile means UTC.
  *
  * @example
  * await getUserProfile(bot, 'U1')
@@ -69,12 +70,14 @@ async function getUserProfile(bot, userId) {
       tz: user?.tz,
       name: user?.profile?.display_name || user?.real_name || user?.name,
       avatar: user?.profile?.image_72,
+      deleted: user?.deleted === true,
+      isBot: user?.is_bot === true || user?.id === 'USLACKBOT',
     };
     profileCache.set(userId, { profile, fetchedAt: Date.now() });
     return profile;
   } catch (error) {
     console.warn(`[WARN] Could not fetch profile for ${userId}: ${error.data?.error || error.message}`);
-    return cached?.profile || {};
+    return cached?.profile || null;
   }
 }
 
@@ -129,6 +132,7 @@ async function sendSurveyTo(bot, channel, name, userId, isoDate) {
  */
 async function surveyTick(bot) {
   const allChannels = bot.surveyStore.data || {};
+  let sentCount = 0;
 
   for (const [channel, surveys] of Object.entries(allChannels)) {
     for (const [name, survey] of Object.entries(surveys || {})) {
@@ -137,16 +141,26 @@ async function surveyTick(bot) {
 
       for (const userId of survey.members) {
         try {
-          const now = nowInZone((await getUserProfile(bot, userId)).tz);
+          const profile = await getUserProfile(bot, userId);
+          // Unknown profile → try again next minute rather than guess UTC and
+          // DM someone at the wrong time of day
+          if (!profile) continue;
+          if (profile.deleted || profile.isBot) continue;
+          const now = nowInZone(profile.tz);
           if (!isSurveyDue(survey, now, sent[userId])) continue;
           if (isUserOnLeave(bot.leaveStore, channel, userId, now.toISODate())) continue;
           await sendSurveyTo(bot, channel, name, userId, now.toISODate());
+          sentCount++;
         } catch (error) {
           console.error(`[ERROR] Survey '${name}' failed for ${userId}:`, error);
         }
       }
     }
   }
+
+  // Back up straight away: on a host with an ephemeral disk, a restart would
+  // otherwise forget who was sent what and DM them all again
+  if (sentCount > 0) await bot.createBackup();
 }
 
 /**

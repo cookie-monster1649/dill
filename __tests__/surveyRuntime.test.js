@@ -166,7 +166,7 @@ describe('posting as the person and editing', () => {
     await finishSurvey(bot);
     const postTs = bot.surveyStateStore.getItem('posts', 'C1::Standup').U1.ts;
 
-    const value = JSON.stringify({ channel: 'C1', name: 'Standup' });
+    const value = JSON.stringify({ channel: 'C1', name: 'Standup', date: '2026-10-26' });
     await openEditAnswers(bot, { ack: async () => {}, action: { value }, body: { user: { id: 'U1' }, trigger_id: 'T' }, client: bot.app.client });
     const form = bot.app.client.views.open.mock.calls[0][0].view;
     expect(form.blocks[0].element.initial_value).toBe('A1');

@@ -19,6 +19,23 @@ const { surveyKey, getUserProfile } = require('./surveyLifecycle');
 // Thread parents older than this are forgotten to keep state small
 const THREAD_RETENTION_DAYS = 7;
 
+// ── Per-survey lock ───────────────────────────────────────────────────────────
+//
+// Posting reads state, awaits Slack, then writes state. Two people finishing
+// at the same moment would both see "no parent yet" and post two threads, so
+// posts for one survey run one at a time.
+
+const locks = new Map(); // "C1::Daily standup" → promise of the last queued post
+
+function withSurveyLock(key, fn) {
+  const previous = locks.get(key) || Promise.resolve();
+  const run = previous.catch(() => {}).then(fn);
+  locks.set(key, run);
+  // Forget the chain once idle so the map doesn't grow forever
+  run.finally(() => { if (locks.get(key) === run) locks.delete(key); }).catch(() => {});
+  return run;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 // '2026-10-26' → 'Mon 26 Oct'
@@ -36,10 +53,15 @@ async function joinChannel(bot, channel) {
   }
 }
 
-// Drops thread records older than the retention window
-function pruneThreads(threads, todayIso) {
+// Drops records older than the retention window. `dateOf` reads each
+// record's ISO date (thread records are keyed by date, posts hold one).
+function pruneByDate(records, todayIso, dateOf) {
   const cutoff = DateTime.fromISO(todayIso).minus({ days: THREAD_RETENTION_DAYS }).toISODate();
-  return Object.fromEntries(Object.entries(threads).filter(([date]) => date >= cutoff));
+  return Object.fromEntries(Object.entries(records).filter(([key, value]) => dateOf(value, key) >= cutoff));
+}
+
+function pruneThreads(threads, todayIso) {
+  return pruneByDate(threads, todayIso, (_, date) => date);
 }
 
 // Shows the answers as posted by the person rather than by Dill. Falls back
@@ -48,7 +70,7 @@ function pruneThreads(threads, todayIso) {
 // @example
 // await authorFields(bot, 'U1') // → { username: 'JJ Monester', icon_url: 'https://…_72.png' }
 async function authorFields(bot, userId) {
-  const { name, avatar } = await getUserProfile(bot, userId);
+  const { name, avatar } = (await getUserProfile(bot, userId)) || {};
   return name ? { username: name, ...(avatar ? { icon_url: avatar } : {}) } : {};
 }
 
@@ -116,15 +138,20 @@ async function postInThread(bot, survey, completed, userId) {
  * @param {string} userId
  */
 async function postCompletedSurvey(bot, survey, completed, userId) {
+  return withSurveyLock(surveyKey(completed.channel, completed.name), () => postLocked(bot, survey, completed, userId));
+}
+
+async function postLocked(bot, survey, completed, userId) {
   await joinChannel(bot, completed.channel);
 
   const ts = survey.postMode === POST_MODES.INDIVIDUAL
     ? await postIndividual(bot, survey, completed, userId)
     : await postInThread(bot, survey, completed, userId);
 
-  // Only the latest post per person is kept – that's the one they can edit
+  // Only the latest post per person is kept – that's the one they can edit.
+  // Posts older than the thread window are dropped to keep backups small.
   const key = surveyKey(completed.channel, completed.name);
-  const posts = bot.surveyStateStore.getItem('posts', key) || {};
+  const posts = pruneByDate(bot.surveyStateStore.getItem('posts', key) || {}, completed.date, post => post.date);
   posts[userId] = { date: completed.date, ts, answers: completed.answers };
   bot.surveyStateStore.setItem('posts', key, posts);
   bot.surveyStateStore.save();
@@ -159,6 +186,10 @@ function recordDoneMessage(bot, channel, name, userId, dmChannel, dmTs) {
  * its original author name and avatar – chat.update can't change those.
  */
 async function updatePostedAnswers(bot, survey, channel, userId, answers) {
+  return withSurveyLock(surveyKey(channel, survey.name), () => updateLocked(bot, survey, channel, userId, answers));
+}
+
+async function updateLocked(bot, survey, channel, userId, answers) {
   const post = getLatestPost(bot, channel, survey.name, userId);
   if (!post) throw new Error('No posted answers to edit');
 
@@ -181,7 +212,7 @@ async function updatePostedAnswers(bot, survey, channel, userId, answers) {
       channel: post.dmChannel,
       ts: post.dmTs,
       text: buildDoneText(survey.name, channel),
-      blocks: buildDoneBlocks(survey, channel, answers, true),
+      blocks: buildDoneBlocks(survey, channel, post.date, answers, true),
     });
   }
 }

@@ -27,14 +27,30 @@ function isSameSurvey(a, b) {
   return !!a && !!b && a.channel === b.channel && a.name === b.name;
 }
 
+/**
+ * Drops any survey from an earlier day than `today`. An ignored survey must
+ * not block every other survey forever, and answers to it would land under
+ * a stale day anyway.
+ *
+ * @example
+ * expireStaleRuns({ active: { name: 'A', date: '2026-10-23', answers: [] }, queue: [{ name: 'B', date: '2026-10-26' }] }, '2026-10-26')
+ * // → { active: { name: 'B', date: '2026-10-26' }, queue: [] }
+ */
+function expireStaleRuns(state, today) {
+  const isCurrent = run => run.date >= today;
+  const remaining = [state.active, ...state.queue].filter(run => run && isCurrent(run));
+  const [active = null, ...queue] = remaining;
+  return { active, queue };
+}
+
 // ── Starting a survey ─────────────────────────────────────────────────────────
 
 /**
  * Adds a newly due survey for a person.
  *
- * If the person is still mid-way through *yesterday's* copy of the same
- * survey, the new day replaces it – stale answers are dropped, as Geekbot
- * does. Otherwise it starts now or waits behind the active survey.
+ * Anything left over from an earlier day is dropped first – stale answers
+ * are discarded, as Geekbot does. The new survey then starts now or waits
+ * behind a survey from the same day.
  *
  * @param {object} state - Person's conversation state (may be undefined)
  * @param {object} run   - { channel, name, date }
@@ -45,13 +61,14 @@ function isSameSurvey(a, b) {
  * // → { state: { active: { ...run, answers: [] }, queue: [] }, startNow: true }
  */
 function enqueueSurvey(state, run) {
-  const current = normaliseState(state);
+  const current = expireStaleRuns(normaliseState(state), run.date);
   const queue = current.queue.filter(q => !isSameSurvey(q, run));
   const fresh = { channel: run.channel, name: run.name, date: run.date, answers: [] };
 
   if (!current.active || isSameSurvey(current.active, run)) {
     return { state: { active: fresh, queue }, startNow: true };
   }
+  // A same-day survey already in progress keeps its place
   return { state: { active: current.active, queue: [...queue, fresh] }, startNow: false };
 }
 
@@ -124,6 +141,16 @@ function removeSurvey(state, survey) {
   return { state: { active: next, queue: rest }, started: next };
 }
 
+/**
+ * Points a person's in-progress and queued surveys at a renamed survey, so
+ * a rename doesn't strand them mid-conversation.
+ */
+function renameSurveyInState(state, channel, oldName, newName) {
+  const current = normaliseState(state);
+  const rename = run => (run && run.channel === channel && run.name === oldName ? { ...run, name: newName } : run);
+  return { active: rename(current.active), queue: current.queue.map(rename) };
+}
+
 function isIdle(state) {
   const current = normaliseState(state);
   return !current.active && current.queue.length === 0;
@@ -135,5 +162,7 @@ module.exports = {
   currentQuestion,
   recordAnswer,
   removeSurvey,
+  renameSurveyInState,
+  expireStaleRuns,
   isIdle,
 };

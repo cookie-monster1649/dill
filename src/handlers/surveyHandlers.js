@@ -10,6 +10,7 @@
 const { buildSurveysView, buildSurveyFormView } = require('../bot/surveyModalBuilders');
 const { surveyKey } = require('../bot/surveyLifecycle');
 const { POST_MODES } = require('../utils/surveyBlocks');
+const { renameSurveyInState } = require('../utils/surveyConversation');
 
 // Per-survey runtime state that follows a rename and goes on delete
 const SURVEY_STATE_BUCKETS = ['sent', 'threads', 'posts'];
@@ -78,6 +79,12 @@ function renameSurveyData(bot, channel, oldName, newName) {
     bot.surveyStateStore.deleteItem(bucket, surveyKey(channel, oldName));
   }
   bot.surveyStore.deleteItem(channel, oldName);
+
+  // People mid-way through the survey carry on under the new name
+  const people = bot.surveyStateStore.get('people');
+  for (const [userId, state] of Object.entries(people)) {
+    bot.surveyStateStore.setItem('people', userId, renameSurveyInState(state, channel, oldName, newName));
+  }
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────

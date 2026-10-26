@@ -19,6 +19,28 @@ function truncate(text, max = MAX_SECTION_CHARS) {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
+// ── Slack text escaping ───────────────────────────────────────────────────────
+//
+// Slack sends message text with &, < and > escaped. Answers are stored that
+// way (ready to post), so the edit form unescapes them for display and
+// re-escapes whatever the person types back.
+
+// 'R&amp;D' → 'R&D'
+function unescapeSlack(text) {
+  return text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+}
+
+// 'R&D <3' → 'R&amp;D &lt;3' – but keeps <@U123> / <#C123> / <http…> links intact
+function escapeSlack(text) {
+  return text
+    .split(/(<[@#!][^>]+>|<https?:[^>]+>)/)
+    .map((part, i) => (i % 2 === 1 ? part : part.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')))
+    .join('');
+}
+
+// Slack rejects plain_text_input initial values over 3000 characters
+const MAX_INPUT_CHARS = 3000;
+
 // ── DM prompts ────────────────────────────────────────────────────────────────
 
 /**
@@ -49,14 +71,15 @@ function buildDoneText(name, channel) {
  * The "done" DM: a summary of what was posted plus an Edit button. Dill
  * can't edit the person's own DM replies, so this summary is what gets
  * updated after an edit. The button value identifies the post:
- * '{"channel":"C1","name":"Daily standup"}'.
+ * '{"channel":"C1","name":"Daily standup","date":"2026-10-26"}'.
  *
  * @param {object}   survey  - { name, questions }
  * @param {string}   channel
+ * @param {string}   date    - ISO date of the survey run
  * @param {string[]} answers
  * @param {boolean}  [edited]
  */
-function buildDoneBlocks(survey, channel, answers, edited = false) {
+function buildDoneBlocks(survey, channel, date, answers, edited = false) {
   const blocks = [{
     type: 'section',
     text: { type: 'mrkdwn', text: buildDoneText(survey.name, channel) },
@@ -64,7 +87,7 @@ function buildDoneBlocks(survey, channel, answers, edited = false) {
       type: 'button',
       text: { type: 'plain_text', text: 'Edit answers' },
       action_id: 'survey_edit_answers',
-      value: JSON.stringify({ channel, name: survey.name }),
+      value: JSON.stringify({ channel, name: survey.name, date }),
     },
   }, ...buildAnswerSections(survey.questions, answers)];
 
@@ -88,7 +111,13 @@ function buildEditAnswersView(survey, channel, answers) {
     type: 'input',
     block_id: `answer_${i}`,
     label: { type: 'plain_text', text: truncate(question, 2000) },
-    element: { type: 'plain_text_input', action_id: 'value', multiline: true, initial_value: answers[i] || '' },
+    element: {
+      type: 'plain_text_input',
+      action_id: 'value',
+      multiline: true,
+      max_length: MAX_INPUT_CHARS,
+      initial_value: unescapeSlack(answers[i] || '').slice(0, MAX_INPUT_CHARS),
+    },
   }));
 
   return {
@@ -167,6 +196,8 @@ function buildThreadParentBlocks(name, dateLabel, members, completed) {
 
 module.exports = {
   POST_MODES,
+  escapeSlack,
+  unescapeSlack,
   buildIntroText,
   buildQuestionText,
   buildDoneText,

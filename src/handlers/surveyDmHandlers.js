@@ -25,10 +25,16 @@ const { LOVE_REACTION, isGratitude } = require('../utils/gratitude');
  */
 function isAnswerMessage(message) {
   return message.channel_type === 'im'
-    && !message.subtype
+    // file_share = a reply with a screenshot/attachment; its text still counts
+    && (!message.subtype || message.subtype === 'file_share')
     && !message.bot_id
     && typeof message.text === 'string'
     && message.text.trim().length > 0;
+}
+
+function isAttachmentOnly(message) {
+  return message.channel_type === 'im' && message.subtype === 'file_share'
+    && !message.bot_id && !(message.text || '').trim();
 }
 
 // ── Reply helper ──────────────────────────────────────────────────────────────
@@ -55,6 +61,12 @@ async function reactWithLove(bot, message) {
  * @param {object} payload - Bolt payload containing `message`
  */
 async function handleSurveyDm(bot, { message }) {
+  // An image with no text can't be posted as an answer – say so rather
+  // than silently waiting
+  if (isAttachmentOnly(message) && getPersonState(bot, message.user)?.active) {
+    await dm(bot, message.user, "I can only post text answers. Please type your answer – you can include a link to the file.");
+    return;
+  }
   if (!isAnswerMessage(message)) return;
   const userId = message.user;
   const state = getPersonState(bot, userId);
@@ -84,6 +96,9 @@ async function handleSurveyDm(bot, { message }) {
 
   if (!completed) {
     await askCurrentQuestion(bot, userId, survey);
+    // Partial answers are backed up too, so a restart mid-survey resumes
+    // where the person left off instead of losing their answers
+    await bot.createBackup();
     return;
   }
 
@@ -92,7 +107,7 @@ async function handleSurveyDm(bot, { message }) {
     const done = await slackApiCall(bot.app.client.chat.postMessage, {
       channel: userId,
       text: buildDoneText(completed.name, completed.channel),
-      blocks: buildDoneBlocks(survey, completed.channel, completed.answers),
+      blocks: buildDoneBlocks(survey, completed.channel, completed.date, completed.answers),
     });
     // Remembered so an edit can refresh this summary
     recordDoneMessage(bot, completed.channel, completed.name, userId, done.channel, done.ts);
