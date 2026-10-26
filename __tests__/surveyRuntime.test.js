@@ -27,7 +27,7 @@ function makeBot(postMode = 'thread') {
     users: { info: jest.fn(async ({ user }) => ({ user: { tz: TZ[user], real_name: `Name ${user}`, profile: { image_72: `https://img/${user}.png` } } })) },
     views: { open: jest.fn(async () => ({})) },
     chat: {
-      postMessage: jest.fn(async () => ({ ts: `${++ts}.000` })),
+      postMessage: jest.fn(async ({ channel }) => ({ ts: `${++ts}.000`, channel })),
       update: jest.fn(async () => ({})),
     },
     conversations: { join: jest.fn(async () => ({})) },
@@ -158,10 +158,15 @@ describe('posting as the person and editing', () => {
     const values = { answer_0: { value: { value: 'A1 fixed' } }, answer_1: { value: { value: 'A2' } } };
     await handleEditSubmit(bot, { ack: async () => {}, body: { user: { id: 'U1' } }, view: { private_metadata: value, state: { values } } });
 
-    const [update] = bot.app.client.chat.update.mock.calls.at(-1);
+    const update = bot.app.client.chat.update.mock.calls.map(([a]) => a).find(a => a.channel === 'C1');
     expect(update.ts).toBe(postTs);
     expect(update.blocks[1].text.text).toBe('*Q1*\nA1 fixed');
     expect(sentTo(bot, 'C1')).toHaveLength(1); // no new post
+
+    // The DM summary is refreshed too, since Dill can't edit the person's own replies
+    const dmUpdate = bot.app.client.chat.update.mock.calls.map(([a]) => a).find(a => a.channel === 'U1');
+    expect(dmUpdate.blocks[1].text.text).toBe('*Q1*\nA1 fixed');
+    expect(dmUpdate.blocks.at(-1).elements[0].text).toContain('edited');
   });
 });
 

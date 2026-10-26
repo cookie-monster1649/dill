@@ -14,7 +14,7 @@ const {
   askFirstQuestion,
   askCurrentQuestion,
 } = require('../bot/surveyLifecycle');
-const { postCompletedSurvey } = require('../bot/surveyPosting');
+const { postCompletedSurvey, recordDoneMessage } = require('../bot/surveyPosting');
 
 // ── Filtering ─────────────────────────────────────────────────────────────────
 
@@ -76,11 +76,13 @@ async function handleSurveyDm(bot, { message }) {
 
   try {
     await postCompletedSurvey(bot, survey, completed, userId);
-    await slackApiCall(bot.app.client.chat.postMessage, {
+    const done = await slackApiCall(bot.app.client.chat.postMessage, {
       channel: userId,
       text: buildDoneText(completed.name, completed.channel),
-      blocks: buildDoneBlocks(completed.name, completed.channel),
+      blocks: buildDoneBlocks(survey, completed.channel, completed.answers),
     });
+    // Remembered so an edit can refresh this summary
+    recordDoneMessage(bot, completed.channel, completed.name, userId, done.channel, done.ts);
   } catch (error) {
     console.error(`[ERROR] Failed to post survey '${completed.name}' for ${userId}:`, error);
     await dm(bot, userId, `:x: Sorry, I couldn't post your *${completed.name}* answers to <#${completed.channel}>. Please let an admin know.`);

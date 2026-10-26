@@ -46,20 +46,32 @@ function buildDoneText(name, channel) {
 }
 
 /**
- * The "done" DM with an Edit button. The button value identifies the post:
+ * The "done" DM: a summary of what was posted plus an Edit button. Dill
+ * can't edit the person's own DM replies, so this summary is what gets
+ * updated after an edit. The button value identifies the post:
  * '{"channel":"C1","name":"Daily standup"}'.
+ *
+ * @param {object}   survey  - { name, questions }
+ * @param {string}   channel
+ * @param {string[]} answers
+ * @param {boolean}  [edited]
  */
-function buildDoneBlocks(name, channel) {
-  return [{
+function buildDoneBlocks(survey, channel, answers, edited = false) {
+  const blocks = [{
     type: 'section',
-    text: { type: 'mrkdwn', text: buildDoneText(name, channel) },
+    text: { type: 'mrkdwn', text: buildDoneText(survey.name, channel) },
     accessory: {
       type: 'button',
       text: { type: 'plain_text', text: 'Edit answers' },
       action_id: 'survey_edit_answers',
-      value: JSON.stringify({ channel, name }),
+      value: JSON.stringify({ channel, name: survey.name }),
     },
-  }];
+  }, ...buildAnswerSections(survey.questions, answers)];
+
+  if (edited) {
+    blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: '_(edited – the channel post is updated too)_' }] });
+  }
+  return blocks;
 }
 
 /**
@@ -116,12 +128,15 @@ function buildAnswerBlocks(survey, userId, answers) {
     text: { type: 'mrkdwn', text: `<@${userId}> posted *${survey.name}*` },
   };
 
-  const answerSections = survey.questions.map((question, i) => ({
+  return [header, ...buildAnswerSections(survey.questions, answers)];
+}
+
+// One section per question, e.g. { section "*Yesterday?*\nShipped it" }
+function buildAnswerSections(questions, answers) {
+  return questions.map((question, i) => ({
     type: 'section',
     text: { type: 'mrkdwn', text: truncate(`*${question}*\n${answers[i] || '_No answer_'}`) },
   }));
-
-  return [header, ...answerSections];
 }
 
 /**

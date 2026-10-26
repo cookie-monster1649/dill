@@ -8,11 +8,12 @@
 //
 // Answer messages are posted with the person's name and avatar (needs the
 // chat:write.customize scope) and recorded so they can be edited later:
-//   posts → "C1::Daily standup" → { U1: { date: '2026-10-26', ts: '1730…', answers: [...] } }
+//   posts → "C1::Daily standup" → { U1: { date: '2026-10-26', ts: '1730…', answers: [...],
+//                                          dmChannel: 'D1', dmTs: '1730…' } }
 
 const { DateTime } = require('luxon');
 const { slackApiCall } = require('../utils/slackHelpers');
-const { POST_MODES, buildAnswerBlocks, buildThreadParentBlocks } = require('../utils/surveyBlocks');
+const { POST_MODES, buildAnswerBlocks, buildThreadParentBlocks, buildDoneBlocks, buildDoneText } = require('../utils/surveyBlocks');
 const { surveyKey, getUserProfile } = require('./surveyLifecycle');
 
 // Thread parents older than this are forgotten to keep state small
@@ -142,8 +143,19 @@ function getLatestPost(bot, channel, name, userId) {
   return (bot.surveyStateStore.getItem('posts', surveyKey(channel, name)) || {})[userId] || null;
 }
 
+// Saves where the "done" DM summary is so an edit can refresh it
+function recordDoneMessage(bot, channel, name, userId, dmChannel, dmTs) {
+  const key = surveyKey(channel, name);
+  const posts = bot.surveyStateStore.getItem('posts', key) || {};
+  if (!posts[userId]) return;
+  posts[userId] = { ...posts[userId], dmChannel, dmTs };
+  bot.surveyStateStore.setItem('posts', key, posts);
+  bot.surveyStateStore.save();
+}
+
 /**
- * Replaces the answers in a person's existing channel post. The post keeps
+ * Replaces the answers in a person's existing channel post, then refreshes
+ * the summary in their DM. The post keeps
  * its original author name and avatar – chat.update can't change those.
  */
 async function updatePostedAnswers(bot, survey, channel, userId, answers) {
@@ -162,6 +174,16 @@ async function updatePostedAnswers(bot, survey, channel, userId, answers) {
   posts[userId] = { ...post, answers };
   bot.surveyStateStore.setItem('posts', key, posts);
   bot.surveyStateStore.save();
+
+  // Older posts pre-date the DM summary, so there may be nothing to refresh
+  if (post.dmChannel && post.dmTs) {
+    await slackApiCall(bot.app.client.chat.update, {
+      channel: post.dmChannel,
+      ts: post.dmTs,
+      text: buildDoneText(survey.name, channel),
+      blocks: buildDoneBlocks(survey, channel, answers, true),
+    });
+  }
 }
 
-module.exports = { postCompletedSurvey, getLatestPost, updatePostedAnswers, formatDateLabel, pruneThreads };
+module.exports = { postCompletedSurvey, recordDoneMessage, getLatestPost, updatePostedAnswers, formatDateLabel, pruneThreads };
