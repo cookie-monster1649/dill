@@ -14,6 +14,7 @@
 //   /dill restore-backup etc.      →  src/commands/backupCommands.js
 //   Button/modal callbacks         →  src/handlers/actionHandlers.js
 //   Leave calendar UI              →  src/handlers/leaveHandlers.js
+//   Pick message preview           →  src/handlers/pickNotesHandlers.js
 
 require('dotenv').config();
 
@@ -39,6 +40,7 @@ const { openSelectModal, openNewRotationModal, buildNewRotationViewForBot, build
 const { handleHelpCommand, handleStatusCommand, handleResetCommand, handlePickCommand, handleMeCommand } = require('./commands/adminCommands');
 const { handleRestoreBackupCommand, handleDeleteBackupCommand, handleDeleteBackupConfirm, handleKillKillKillCommand } = require('./commands/backupCommands');
 const { openLeaveModal, handleLeaveAddOpen, handleLeaveAddSubmit, handleLeaveRemove } = require('./handlers/leaveHandlers');
+const { handlePickNotesPreview, handlePreviewButton } = require('./handlers/pickNotesHandlers');
 
 const config = require('../config');
 
@@ -130,6 +132,10 @@ class DillBot {
     this.app.action('speaking_order_toggle', handlers.handleSpeakingOrderToggle.bind(handlers));
     this.app.action('speaking_order_post',   handlers.handleSpeakingOrderPostAction.bind(handlers));
     this.app.view('dill_action_complete',   async ({ ack }) => { await ack(); });
+
+    // ── Pick message preview ───────────────────────────────────────────────
+    this.app.action('pick_notes_preview',   handlePickNotesPreview);
+    this.app.action(/^pick_preview_/,       handlePreviewButton);
 
     // ── Speaking-order reactions ───────────────────────────────────────────
     // ❌ on a speaking-order list removes the reacting person

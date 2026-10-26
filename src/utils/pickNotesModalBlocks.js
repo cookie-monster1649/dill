@@ -1,10 +1,10 @@
 // ── Pick Notes Modal Blocks ───────────────────────────────────────────────────
 //
 // Block Kit fragments for editing pick notes in the rotation edit modal: a
-// rich text editor (links, bold, lists…) plus a preview of the pick message
-// as it will appear in the channel.
+// rich text editor (links, bold, lists…) plus a button that previews the
+// pick message as it will appear in the channel.
 
-const { toRichText, isEmptyRichText, buildPickNotesMessageBlocks } = require('./pickNotes');
+const { toRichText, isEmptyRichText } = require('./pickNotes');
 
 // ── Editor ────────────────────────────────────────────────────────────────────
 
@@ -24,40 +24,25 @@ function buildEditorBlock(existingConfig) {
   };
 }
 
-// ── Preview ───────────────────────────────────────────────────────────────────
+// ── Preview button ────────────────────────────────────────────────────────────
+
+// Opens the pick-message preview on top of the form (see pickNotesHandlers).
+// Block actions from a modal carry its current, unsaved input values, so the
+// preview shows exactly what has been typed.
+const PREVIEW_BUTTON_BLOCK = {
+  type: 'actions',
+  elements: [{
+    type: 'button',
+    action_id: 'pick_notes_preview',
+    text: { type: 'plain_text', text: 'Preview pick message' },
+  }],
+};
 
 /**
- * A mock-up of the pick message using the saved notes. Only shown for saved
- * rotations that have notes; it reflects the last save, not unsaved edits,
- * because Slack doesn't send rich text changes until the form is submitted.
- *
- * Example rendering:
- *   Preview – how the pick message will look
- *   *Retro*: It's your turn, @Alex!
- *   Update the actions list and review the retro board
+ * Editor plus preview button, ready to spread into the edit modal's blocks.
  */
-function buildPreviewBlocks(existingConfig, preName) {
-  const notesBlocks = buildPickNotesMessageBlocks(existingConfig?.pickNotes);
-  if (!preName || notesBlocks.length === 0) return [];
-
-  const sampleUser = existingConfig.members?.[0];
-  const who = sampleUser ? `<@${sampleUser}>` : 'someone';
-
-  return [
-    {
-      type: 'context',
-      elements: [{ type: 'mrkdwn', text: '*Preview* – how the pick message will look (updates when you save)' }],
-    },
-    { type: 'section', text: { type: 'mrkdwn', text: `*${preName}*: It's your turn, ${who}!` } },
-    ...notesBlocks,
-  ];
-}
-
-/**
- * Editor plus preview, ready to spread into the edit modal's blocks.
- */
-function buildPickNotesInputBlocks(existingConfig, preName) {
-  return [buildEditorBlock(existingConfig), ...buildPreviewBlocks(existingConfig, preName)];
+function buildPickNotesInputBlocks(existingConfig) {
+  return [buildEditorBlock(existingConfig), PREVIEW_BUTTON_BLOCK];
 }
 
 // ── Submission parsing ────────────────────────────────────────────────────────

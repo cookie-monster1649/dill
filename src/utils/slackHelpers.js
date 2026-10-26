@@ -209,8 +209,8 @@ function buildNewRotationView(channel, preName = '', existingConfig = null, time
         } 
       },
       
-      // Notes shown in every pick message, with a preview once saved
-      ...buildPickNotesInputBlocks(existingConfig, preName),
+      // Notes shown in every pick message, with a preview button
+      ...buildPickNotesInputBlocks(existingConfig),
 
       { type: 'divider' },
       { type: 'header', text: { type: 'plain_text', text: 'Schedule' } },

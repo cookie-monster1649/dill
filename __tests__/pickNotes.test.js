@@ -3,6 +3,7 @@
 
 const { toRichText, isEmptyRichText, buildPickNotesMessageBlocks } = require('../src/utils/pickNotes');
 const { buildPickNotesInputBlocks, readPickNotes } = require('../src/utils/pickNotesModalBlocks');
+const { buildPickPreviewView } = require('../src/handlers/pickNotesHandlers');
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -79,14 +80,36 @@ describe('buildPickNotesMessageBlocks', () => {
 });
 
 describe('buildPickNotesInputBlocks', () => {
-  test('shows a preview for saved rotations with notes', () => {
-    const blocks = buildPickNotesInputBlocks({ pickNotes: RICH, members: ['U1'] }, 'Retro');
-    expect(blocks.map(b => b.type)).toEqual(['input', 'context', 'section', 'rich_text']);
-    expect(blocks[2].text.text).toBe("*Retro*: It's your turn, <@U1>!");
+  test('editor is followed by the preview button', () => {
+    const blocks = buildPickNotesInputBlocks({ pickNotes: RICH });
+    expect(blocks.map(b => b.type)).toEqual(['input', 'actions']);
+    expect(blocks[1].elements[0].action_id).toBe('pick_notes_preview');
+  });
+});
+
+describe('buildPickPreviewView', () => {
+  const values = {
+    name_block: { name_input: { value: 'Retro' } },
+    member_block: { members_select: { selected_users: ['U1', 'U2'] } },
+    schedule_tz: { tz_select: { selected_option: { value: 'Australia/Sydney' } } },
+    pick_notes: { pick_notes_input: { rich_text_value: RICH } },
+  };
+
+  test('renders the unsaved notes as the pick message', () => {
+    const { blocks } = buildPickPreviewView(values, 'UVIEWER');
+    expect(blocks.find(b => b.type === 'section').text.text).toMatch(/^\*Retro\*: It's your turn, <@U1>!/);
+    expect(blocks.find(b => b.type === 'rich_text').elements).toBe(RICH.elements);
   });
 
-  test('no preview for a new rotation', () => {
-    expect(buildPickNotesInputBlocks({ pickNotes: RICH }, '')).toHaveLength(1);
+  test('pick buttons are inert copies', () => {
+    const actions = buildPickPreviewView(values, 'UVIEWER').blocks.find(b => b.type === 'actions');
+    expect(actions.elements.map(e => e.action_id)).toEqual(['pick_preview_accept', 'pick_preview_skip']);
+    expect(actions.block_id).toBeUndefined();
+  });
+
+  test('falls back to the viewer when no members are chosen', () => {
+    const { blocks } = buildPickPreviewView({}, 'UVIEWER');
+    expect(blocks.find(b => b.type === 'section').text.text).toMatch(/<@UVIEWER>/);
   });
 });
 

@@ -271,7 +271,7 @@ Members with no date set appear at the front of the queue (they go first).
 
 ### Pick message notes
 
-Every rotation has an optional **Pick message notes** field. It's a rich text editor, so you can add links (toolbar or ⌘K / Ctrl+K), bold, lists and so on. Whatever you write there (e.g. what to prepare, a Trello board link) is shown in each pick message, and the edit modal shows a preview of the pick message once saved.
+Every rotation has an optional **Pick message notes** field. It's a rich text editor, so you can add links (toolbar or ⌘K / Ctrl+K), bold, lists and so on. Whatever you write there (e.g. what to prepare, a Trello board link) is shown in each pick message, and **Preview pick message** shows how it will look before you save.
 
 ### Speaking order
 
