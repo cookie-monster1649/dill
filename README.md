@@ -296,6 +296,7 @@ Async standups in the style of Geekbot. Open `/dill` in the channel where answer
 - **Who and when** – pick the people, days and a time. Each person gets a DM at that time **in their own Slack timezone**
 - **Answering** – Dill asks one question at a time in the DM, and each reply answers the current question
 - **Posting** – when someone finishes, their answers post to the channel, either as replies in **one thread per day** (the parent shows who's still to answer) or as **one message per person**. Posts show the person's name and avatar
+- **Non-answers** – answers like "no", "nope", "n/a", "skip" or "no blockers" are left out of the channel post (the person's DM summary still shows them, marked as not posted). Longer answers such as "No, but the deploy is stuck" are kept
 - **Thanks** – a short "thanks" or "good bot" DM to Dill (outside a survey) gets a :heart: reaction
 - **Editing** – edit any of your DM replies in Slack and the change is used, whether you're still answering or already posted. The "Thanks!" DM also has an **Edit answers** button. Either way the channel post updates in place
 - **Leave** – people on leave in that channel aren't sent the survey

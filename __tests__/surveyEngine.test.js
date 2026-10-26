@@ -4,7 +4,7 @@
 const { DateTime } = require('luxon');
 const { isSurveyDue, minutesSinceSendTime, nowInZone, CATCH_UP_MINUTES } = require('../src/utils/surveySchedule');
 const { enqueueSurvey, currentQuestion, recordAnswer, removeSurvey, isIdle } = require('../src/utils/surveyConversation');
-const { buildAnswerBlocks, buildThreadParentBlocks, buildQuestionText } = require('../src/utils/surveyBlocks');
+const { buildAnswerBlocks, buildThreadParentBlocks, buildQuestionText, buildDoneBlocks } = require('../src/utils/surveyBlocks');
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -156,7 +156,21 @@ describe('survey blocks', () => {
     const blocks = buildAnswerBlocks({ name: 'Standup', questions: ['Q1', 'Q2'] }, 'U1', ['A1']);
     expect(blocks[0].text.text).toBe('<@U1> posted *Standup*');
     expect(blocks[1].text.text).toBe('*Q1*\nA1');
-    expect(blocks[2].text.text).toBe('*Q2*\n_No answer_');
+    expect(blocks).toHaveLength(2); // the missing Q2 answer is left out
+  });
+
+  test('non-answers are hidden from the post but marked in the DM summary', () => {
+    const survey = { name: 'Standup', questions: ['Yesterday?', 'Blockers?'] };
+    const post = buildAnswerBlocks(survey, 'U1', ['Shipped it', 'Nope!']);
+    expect(post.map(b => b.text.text)).toEqual(['<@U1> posted *Standup*', '*Yesterday?*\nShipped it']);
+
+    const summary = buildDoneBlocks(survey, 'C1', '2026-10-26', ['Shipped it', 'Nope!']);
+    expect(summary[2].text.text).toBe('*Blockers?*\nNope!  _(not posted)_');
+  });
+
+  test('a post where every answer is a non-answer says so', () => {
+    const post = buildAnswerBlocks({ name: 'S', questions: ['Q1', 'Q2'] }, 'U1', ['no', 'n/a']);
+    expect(post[1].text.text).toBe('_Nothing to report._');
   });
 
   test('long answers are truncated to fit Slack limits', () => {

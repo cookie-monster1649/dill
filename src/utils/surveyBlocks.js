@@ -4,6 +4,8 @@
 // person sees, and the answer posts in the shared channel. Pure functions –
 // no Slack calls – so the wording and layout can be unit-tested.
 
+const { isEmptyAnswer } = require('./emptyAnswers');
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 // How completed answers land in the shared channel, chosen per survey
@@ -157,15 +159,31 @@ function buildAnswerBlocks(survey, userId, answers) {
     text: { type: 'mrkdwn', text: `<@${userId}> posted *${survey.name}*` },
   };
 
-  return [header, ...buildAnswerSections(survey.questions, answers)];
+  // "No" / "nope" / "n/a" answers are left out of the channel post
+  const sections = buildAnswerSections(survey.questions, answers, { hideEmpty: true });
+  const body = sections.length > 0
+    ? sections
+    : [{ type: 'section', text: { type: 'mrkdwn', text: '_Nothing to report._' } }];
+
+  return [header, ...body];
 }
 
-// One section per question, e.g. { section "*Yesterday?*\nShipped it" }
-function buildAnswerSections(questions, answers) {
-  return questions.map((question, i) => ({
-    type: 'section',
-    text: { type: 'mrkdwn', text: truncate(`*${question}*\n${answers[i] || '_No answer_'}`) },
-  }));
+/**
+ * One section per question, e.g. { section "*Yesterday?*\nShipped it" }.
+ *
+ * hideEmpty → drop non-answers (channel post)
+ * otherwise → keep them, marked as not posted (the person's DM summary)
+ */
+function buildAnswerSections(questions, answers, { hideEmpty = false } = {}) {
+  return questions.flatMap((question, i) => {
+    const answer = answers[i] || '';
+    const empty = isEmptyAnswer(answer);
+    if (empty && hideEmpty) return [];
+
+    const shown = answer || '_No answer_';
+    const note = empty ? '  _(not posted)_' : '';
+    return [{ type: 'section', text: { type: 'mrkdwn', text: truncate(`*${question}*\n${shown}${note}`) } }];
+  });
 }
 
 /**
