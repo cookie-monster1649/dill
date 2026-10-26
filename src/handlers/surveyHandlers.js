@@ -10,6 +10,9 @@ const { buildSurveysView, buildSurveyFormView } = require('../bot/surveyModalBui
 const { surveyKey } = require('../bot/surveyLifecycle');
 const { POST_MODES } = require('../utils/surveyBlocks');
 
+// Per-survey runtime state that follows a rename and goes on delete
+const SURVEY_STATE_BUCKETS = ['sent', 'threads', 'posts'];
+
 // ── Form parsing ──────────────────────────────────────────────────────────────
 
 /**
@@ -56,21 +59,22 @@ function parseSurveyForm(values) {
 // ── Data changes ──────────────────────────────────────────────────────────────
 
 /**
- * Removes a survey's config and its send/thread history. People mid-way
+ * Removes a survey's config and its send/thread/post history. People mid-way
  * through it are moved on the next time they reply (see surveyDmHandlers).
  */
 function deleteSurveyData(bot, channel, name) {
   bot.surveyStore.deleteItem(channel, name);
-  bot.surveyStateStore.deleteItem('sent', surveyKey(channel, name));
-  bot.surveyStateStore.deleteItem('threads', surveyKey(channel, name));
+  for (const bucket of SURVEY_STATE_BUCKETS) {
+    bot.surveyStateStore.deleteItem(bucket, surveyKey(channel, name));
+  }
 }
 
 /**
- * Moves send/thread history to a new name so a rename doesn't re-send
+ * Moves send/thread/post history to a new name so a rename doesn't re-send
  * today's survey to everyone.
  */
 function renameSurveyData(bot, channel, oldName, newName) {
-  for (const bucket of ['sent', 'threads']) {
+  for (const bucket of SURVEY_STATE_BUCKETS) {
     const data = bot.surveyStateStore.getItem(bucket, surveyKey(channel, oldName));
     if (data) bot.surveyStateStore.setItem(bucket, surveyKey(channel, newName), data);
     bot.surveyStateStore.deleteItem(bucket, surveyKey(channel, oldName));

@@ -24,8 +24,7 @@ const { isUserOnLeave } = require('./leaveHelpers');
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-// Slack timezones rarely change; re-check a few times a day at most
-const TZ_CACHE_MS = 6 * 60 * 60 * 1000;
+const PROFILE_CACHE_MS = 6 * 60 * 60 * 1000;
 
 // ── State access ──────────────────────────────────────────────────────────────
 
@@ -46,26 +45,36 @@ function getSurvey(bot, channel, name) {
   return bot.surveyStore.getItem(channel, name);
 }
 
-// ── Timezones ─────────────────────────────────────────────────────────────────
+// ── Profiles ──────────────────────────────────────────────────────────────────
 
-const tzCache = new Map(); // userId → { tz: 'Australia/Sydney', fetchedAt: 1730000000000 }
+// Names, avatars and timezones rarely change; re-check a few times a day at most
+const profileCache = new Map();
+// userId → { profile: { tz: 'Australia/Sydney', name: 'JJ', avatar: 'https://…' }, fetchedAt: 1730000000000 }
 
 /**
- * Looks up a person's Slack timezone, cached. Returns undefined on failure,
- * which nowInZone treats as UTC.
+ * Looks up the parts of a person's Slack profile surveys need, cached.
+ * Returns {} on failure, which callers treat as "UTC, post as Dill".
+ *
+ * @example
+ * await getUserProfile(bot, 'U1')
+ * // → { tz: 'Australia/Sydney', name: 'JJ Monester', avatar: 'https://avatars.slack-edge.com/…_72.png' }
  */
-async function getUserTz(bot, userId) {
-  const cached = tzCache.get(userId);
-  if (cached && Date.now() - cached.fetchedAt < TZ_CACHE_MS) return cached.tz;
+async function getUserProfile(bot, userId) {
+  const cached = profileCache.get(userId);
+  if (cached && Date.now() - cached.fetchedAt < PROFILE_CACHE_MS) return cached.profile;
 
   try {
-    const result = await bot.app.client.users.info({ user: userId });
-    const tz = result.user?.tz;
-    tzCache.set(userId, { tz, fetchedAt: Date.now() });
-    return tz;
+    const { user } = await bot.app.client.users.info({ user: userId });
+    const profile = {
+      tz: user?.tz,
+      name: user?.profile?.display_name || user?.real_name || user?.name,
+      avatar: user?.profile?.image_72,
+    };
+    profileCache.set(userId, { profile, fetchedAt: Date.now() });
+    return profile;
   } catch (error) {
-    console.warn(`[WARN] Could not fetch timezone for ${userId}: ${error.data?.error || error.message}`);
-    return cached?.tz;
+    console.warn(`[WARN] Could not fetch profile for ${userId}: ${error.data?.error || error.message}`);
+    return cached?.profile || {};
   }
 }
 
@@ -128,7 +137,7 @@ async function surveyTick(bot) {
 
       for (const userId of survey.members) {
         try {
-          const now = nowInZone(await getUserTz(bot, userId));
+          const now = nowInZone((await getUserProfile(bot, userId)).tz);
           if (!isSurveyDue(survey, now, sent[userId])) continue;
           if (isUserOnLeave(bot.leaveStore, channel, userId, now.toISODate())) continue;
           await sendSurveyTo(bot, channel, name, userId, now.toISODate());
@@ -166,6 +175,7 @@ module.exports = {
   getPersonState,
   setPersonState,
   getSurvey,
+  getUserProfile,
   askFirstQuestion,
   askCurrentQuestion,
   sendSurveyTo,

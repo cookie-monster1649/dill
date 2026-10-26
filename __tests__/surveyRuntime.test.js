@@ -5,6 +5,7 @@
 const { surveyTick } = require('../src/bot/surveyLifecycle');
 const { handleSurveyDm } = require('../src/handlers/surveyDmHandlers');
 const { parseSurveyForm } = require('../src/handlers/surveyHandlers');
+const { openEditAnswers, handleEditSubmit } = require('../src/handlers/surveyEditHandlers');
 
 // ── Fakes ─────────────────────────────────────────────────────────────────────
 
@@ -23,7 +24,8 @@ const TZ = { U1: 'Australia/Sydney', U2: 'Europe/London' };
 function makeBot(postMode = 'thread') {
   let ts = 0;
   const client = {
-    users: { info: jest.fn(async ({ user }) => ({ user: { tz: TZ[user] } })) },
+    users: { info: jest.fn(async ({ user }) => ({ user: { tz: TZ[user], real_name: `Name ${user}`, profile: { image_72: `https://img/${user}.png` } } })) },
+    views: { open: jest.fn(async () => ({})) },
     chat: {
       postMessage: jest.fn(async () => ({ ts: `${++ts}.000` })),
       update: jest.fn(async () => ({})),
@@ -116,6 +118,50 @@ describe('handleSurveyDm', () => {
     await handleSurveyDm(bot, { message: { channel_type: 'im', user: 'U1', text: 'x', subtype: 'message_changed' } });
     await handleSurveyDm(bot, { message: { channel_type: 'im', user: 'U1', text: 'x', bot_id: 'B1' } });
     expect(bot.app.client.chat.postMessage).not.toHaveBeenCalled();
+  });
+});
+
+// ── Author + editing ──────────────────────────────────────────────────────────
+
+describe('posting as the person and editing', () => {
+  async function finishSurvey(bot) {
+    await surveyTick(bot);
+    await reply(bot, 'U1', 'A1');
+    await reply(bot, 'U1', 'A2');
+  }
+
+  test('answers post with the person’s name and avatar', async () => {
+    const bot = makeBot('individual');
+    await finishSurvey(bot);
+    const [post] = sentTo(bot, 'C1');
+    expect(post.username).toBe('Name U1');
+    expect(post.icon_url).toBe('https://img/U1.png');
+  });
+
+  test('the done DM offers an Edit answers button', async () => {
+    const bot = makeBot();
+    await finishSurvey(bot);
+    const done = sentTo(bot, 'U1').at(-1);
+    expect(done.blocks[0].accessory.action_id).toBe('survey_edit_answers');
+  });
+
+  test('Edit answers opens a prefilled form and saving updates the post in place', async () => {
+    const bot = makeBot('individual');
+    await finishSurvey(bot);
+    const postTs = bot.surveyStateStore.getItem('posts', 'C1::Standup').U1.ts;
+
+    const value = JSON.stringify({ channel: 'C1', name: 'Standup' });
+    await openEditAnswers(bot, { ack: async () => {}, action: { value }, body: { user: { id: 'U1' }, trigger_id: 'T' }, client: bot.app.client });
+    const form = bot.app.client.views.open.mock.calls[0][0].view;
+    expect(form.blocks[0].element.initial_value).toBe('A1');
+
+    const values = { answer_0: { value: { value: 'A1 fixed' } }, answer_1: { value: { value: 'A2' } } };
+    await handleEditSubmit(bot, { ack: async () => {}, body: { user: { id: 'U1' } }, view: { private_metadata: value, state: { values } } });
+
+    const [update] = bot.app.client.chat.update.mock.calls.at(-1);
+    expect(update.ts).toBe(postTs);
+    expect(update.blocks[1].text.text).toBe('*Q1*\nA1 fixed');
+    expect(sentTo(bot, 'C1')).toHaveLength(1); // no new post
   });
 });
 

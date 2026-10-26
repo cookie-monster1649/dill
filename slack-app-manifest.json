@@ -36,7 +36,8 @@
                 "groups:history",
                 "users:read",
                 "reactions:read",
-                "im:history"
+                "im:history",
+                "chat:write.customize"
             ]
         },
         "pkce_enabled": false

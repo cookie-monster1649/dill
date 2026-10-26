@@ -95,6 +95,7 @@ Go to [api.slack.com/apps](https://api.slack.com/apps) and create a new app **fr
 | `channels:join` | Join public channels when a pick is triggered |
 | `reactions:read` | Read :x: reactions on speaking-order lists |
 | `im:history` | Read survey answers people send Dill by DM |
+| `chat:write.customize` | Post survey answers with the person's name and avatar |
 
 **Subscribe to bot events** under *Features → Event Subscriptions*: `reaction_added` and `reaction_removed` (used by speaking-order lists), and `message.im` (used by daily surveys).
 
@@ -293,7 +294,8 @@ Async standups in the style of Geekbot. Open `/dill` in the channel where answer
 
 - **Who and when** – pick the people, days and a time. Each person gets a DM at that time **in their own Slack timezone**
 - **Answering** – Dill asks one question at a time in the DM, and each reply answers the current question
-- **Posting** – when someone finishes, their answers post to the channel, either as replies in **one thread per day** (the parent shows who's still to answer) or as **one message per person**
+- **Posting** – when someone finishes, their answers post to the channel, either as replies in **one thread per day** (the parent shows who's still to answer) or as **one message per person**. Posts show the person's name and avatar
+- **Editing** – the "Thanks!" DM has an **Edit answers** button that updates the channel post in place
 - **Leave** – people on leave in that channel aren't sent the survey
 - **Catch-up** – if Dill was offline at send time, it still sends the survey up to 2 hours late, but no later
 - **Overlaps** – if two surveys are due at once, the second waits until the first is finished. A new day's survey replaces yesterday's unfinished one

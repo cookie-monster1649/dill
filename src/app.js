@@ -17,6 +17,7 @@
 //   Pick message preview           →  src/handlers/pickNotesHandlers.js
 //   Daily surveys (send + post)    →  src/bot/surveyLifecycle.js, surveyPosting.js
 //   Survey DM answers              →  src/handlers/surveyDmHandlers.js
+//   Editing posted answers         →  src/handlers/surveyEditHandlers.js
 
 require('dotenv').config();
 
@@ -46,6 +47,7 @@ const { handlePickNotesPreview, handlePreviewButton } = require('./handlers/pick
 const { startSurveyScheduler } = require('./bot/surveyLifecycle');
 const { handleSurveyDm }       = require('./handlers/surveyDmHandlers');
 const { openSurveysTab, openSurveyForm, handleSurveySubmit } = require('./handlers/surveyHandlers');
+const { openEditAnswers, handleEditSubmit } = require('./handlers/surveyEditHandlers');
 
 const config = require('../config');
 
@@ -158,6 +160,8 @@ class DillBot {
     this.app.action('create_survey',    async (payload) => openSurveyForm(this, payload));
     this.app.action('edit_survey',      async (payload) => openSurveyForm(this, payload));
     this.app.view('dill_survey_form',   async (payload) => handleSurveySubmit(this, payload));
+    this.app.action('survey_edit_answers',       async (payload) => openEditAnswers(this, payload));
+    this.app.view('survey_edit_answers_submit',  async (payload) => handleEditSubmit(this, payload));
 
     // ── Leave actions / views ──────────────────────────────────────────────
     // Both tab buttons use views.update to swap the modal content in place,

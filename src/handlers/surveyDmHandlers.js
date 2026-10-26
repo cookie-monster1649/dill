@@ -6,7 +6,7 @@
 
 const { slackApiCall } = require('../utils/slackHelpers');
 const { recordAnswer, removeSurvey } = require('../utils/surveyConversation');
-const { buildDoneText, buildIdleText } = require('../utils/surveyBlocks');
+const { buildDoneText, buildDoneBlocks, buildIdleText } = require('../utils/surveyBlocks');
 const {
   getPersonState,
   setPersonState,
@@ -76,7 +76,11 @@ async function handleSurveyDm(bot, { message }) {
 
   try {
     await postCompletedSurvey(bot, survey, completed, userId);
-    await dm(bot, userId, buildDoneText(completed.name, completed.channel));
+    await slackApiCall(bot.app.client.chat.postMessage, {
+      channel: userId,
+      text: buildDoneText(completed.name, completed.channel),
+      blocks: buildDoneBlocks(completed.name, completed.channel),
+    });
   } catch (error) {
     console.error(`[ERROR] Failed to post survey '${completed.name}' for ${userId}:`, error);
     await dm(bot, userId, `:x: Sorry, I couldn't post your *${completed.name}* answers to <#${completed.channel}>. Please let an admin know.`);

@@ -45,6 +45,51 @@ function buildDoneText(name, channel) {
   return `Thanks! Your *${name}* answers are posted in <#${channel}>.`;
 }
 
+/**
+ * The "done" DM with an Edit button. The button value identifies the post:
+ * '{"channel":"C1","name":"Daily standup"}'.
+ */
+function buildDoneBlocks(name, channel) {
+  return [{
+    type: 'section',
+    text: { type: 'mrkdwn', text: buildDoneText(name, channel) },
+    accessory: {
+      type: 'button',
+      text: { type: 'plain_text', text: 'Edit answers' },
+      action_id: 'survey_edit_answers',
+      value: JSON.stringify({ channel, name }),
+    },
+  }];
+}
+
+/**
+ * Modal for editing posted answers – one multiline input per question,
+ * prefilled. private_metadata repeats the button value so the submit
+ * handler knows which post to update.
+ *
+ * @param {object}   survey  - { name, questions }
+ * @param {string}   channel
+ * @param {string[]} answers - Currently posted answers
+ */
+function buildEditAnswersView(survey, channel, answers) {
+  const blocks = survey.questions.map((question, i) => ({
+    type: 'input',
+    block_id: `answer_${i}`,
+    label: { type: 'plain_text', text: truncate(question, 2000) },
+    element: { type: 'plain_text_input', action_id: 'value', multiline: true, initial_value: answers[i] || '' },
+  }));
+
+  return {
+    type: 'modal',
+    callback_id: 'survey_edit_answers_submit',
+    private_metadata: JSON.stringify({ channel, name: survey.name }),
+    title: { type: 'plain_text', text: 'Edit answers' },
+    submit: { type: 'plain_text', text: 'Update' },
+    close: { type: 'plain_text', text: 'Cancel' },
+    blocks,
+  };
+}
+
 // Reply when someone DMs Dill without an active survey
 function buildIdleText() {
   return "You don't have a survey to answer right now. I'll message you when the next one is due.";
@@ -110,6 +155,8 @@ module.exports = {
   buildIntroText,
   buildQuestionText,
   buildDoneText,
+  buildDoneBlocks,
+  buildEditAnswersView,
   buildIdleText,
   buildAnswerBlocks,
   buildThreadParentBlocks,
