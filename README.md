@@ -297,7 +297,7 @@ Async standups in the style of Geekbot. Open `/dill` in the channel where answer
 - **Answering** – Dill asks one question at a time in the DM, and each reply answers the current question
 - **Posting** – when someone finishes, their answers post to the channel, either as replies in **one thread per day** (the parent shows who's still to answer) or as **one message per person**. Posts show the person's name and avatar
 - **Thanks** – a short "thanks" or "good bot" DM to Dill (outside a survey) gets a :heart: reaction
-- **Editing** – the "Thanks!" DM has an **Edit answers** button that updates the channel post in place
+- **Editing** – edit any of your DM replies in Slack and the change is used, whether you're still answering or already posted. The "Thanks!" DM also has an **Edit answers** button. Either way the channel post updates in place
 - **Leave** – people on leave in that channel aren't sent the survey
 - **Catch-up** – if Dill was offline at send time, it still sends the survey up to 2 hours late, but no later
 - **Overlaps** – if two surveys are due at once, the second waits until the first is finished. A new day's survey replaces yesterday's unfinished one

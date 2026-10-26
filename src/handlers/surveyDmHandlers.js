@@ -5,7 +5,7 @@
 // posted to its channel and the next queued survey (if any) starts.
 
 const { slackApiCall } = require('../utils/slackHelpers');
-const { recordAnswer, removeSurvey } = require('../utils/surveyConversation');
+const { recordAnswer, editAnswer, removeSurvey } = require('../utils/surveyConversation');
 const { buildDoneText, buildDoneBlocks, buildIdleText } = require('../utils/surveyBlocks');
 const {
   getPersonState,
@@ -14,7 +14,7 @@ const {
   askFirstQuestion,
   askCurrentQuestion,
 } = require('../bot/surveyLifecycle');
-const { postCompletedSurvey, recordDoneMessage } = require('../bot/surveyPosting');
+const { postCompletedSurvey, recordDoneMessage, findPostByAnswerTs, updatePostedAnswers } = require('../bot/surveyPosting');
 const { LOVE_REACTION, isGratitude } = require('../utils/gratitude');
 
 // ── Filtering ─────────────────────────────────────────────────────────────────
@@ -35,6 +35,16 @@ function isAnswerMessage(message) {
 function isAttachmentOnly(message) {
   return message.channel_type === 'im' && message.subtype === 'file_share'
     && !message.bot_id && !(message.text || '').trim();
+}
+
+// Slack sends an edited DM as subtype 'message_changed', with the new
+// version under message.message
+function isAnswerEdit(message) {
+  return message.channel_type === 'im'
+    && message.subtype === 'message_changed'
+    && !message.message?.bot_id
+    && typeof message.message?.text === 'string'
+    && message.message.text.trim().length > 0;
 }
 
 // ── Reply helper ──────────────────────────────────────────────────────────────
@@ -61,6 +71,8 @@ async function reactWithLove(bot, message) {
  * @param {object} payload - Bolt payload containing `message`
  */
 async function handleSurveyDm(bot, { message }) {
+  if (isAnswerEdit(message)) return handleAnswerEdit(bot, message);
+
   // An image with no text can't be posted as an answer – say so rather
   // than silently waiting
   if (isAttachmentOnly(message) && getPersonState(bot, message.user)?.active) {
@@ -91,7 +103,7 @@ async function handleSurveyDm(bot, { message }) {
 
   // ── Record the answer ──
   // State is saved before any Slack call so a quick second reply sees it
-  const { state: nextState, completed, started } = recordAnswer(state, survey.questions, message.text);
+  const { state: nextState, completed, started } = recordAnswer(state, survey.questions, message.text, message.ts);
   setPersonState(bot, userId, nextState);
 
   if (!completed) {
@@ -118,6 +130,43 @@ async function handleSurveyDm(bot, { message }) {
   await bot.createBackup();
 
   if (started) await askFirstQuestion(bot, userId, started);
+}
+
+// ── Edits ─────────────────────────────────────────────────────────────────────
+
+/**
+ * A person edited one of their DM replies. If it answers the survey they're
+ * still doing, the new text replaces that answer before it's posted. If it
+ * answers one they've finished, the channel post is updated instead.
+ */
+async function handleAnswerEdit(bot, message) {
+  const { user: userId, ts, text } = message.message;
+
+  // ── In progress ──
+  const state = getPersonState(bot, userId);
+  const { state: nextState, changed } = editAnswer(state, ts, text);
+  if (changed) {
+    setPersonState(bot, userId, nextState);
+    console.log(`[INFO] ${userId} edited an in-progress survey answer`);
+    await bot.createBackup();
+    return;
+  }
+
+  // ── Already posted ──
+  const posted = findPostByAnswerTs(bot, userId, ts);
+  if (!posted) return;
+  const survey = getSurvey(bot, posted.channel, posted.name);
+  if (!survey) return;
+
+  const answers = [...posted.post.answers];
+  answers[posted.index] = text.trim();
+  try {
+    await updatePostedAnswers(bot, survey, posted.channel, userId, answers);
+    console.log(`[INFO] Updated survey answers for ${userId} in '${posted.name}' from a DM edit`);
+    await bot.createBackup();
+  } catch (error) {
+    console.error(`[ERROR] Failed to apply DM edit for ${userId} in '${posted.name}':`, error);
+  }
 }
 
 module.exports = { handleSurveyDm, isAnswerMessage };

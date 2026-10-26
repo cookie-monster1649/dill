@@ -99,6 +99,7 @@ function currentQuestion(state, questions) {
  * @param {object}   state
  * @param {string[]} questions - The active survey's questions
  * @param {string}   text      - The person's reply
+ * @param {string}   [messageTs] - Slack ts of the reply, for matching later edits
  * @returns {{ state: object, completed: object|null, started: object|null }}
  *
  * @example
@@ -106,12 +107,15 @@ function currentQuestion(state, questions) {
  * // → { state: { active: null, queue: [] },
  * //     completed: { ...run, answers: ['A1', 'A2'] }, started: null }
  */
-function recordAnswer(state, questions, text) {
+function recordAnswer(state, questions, text, messageTs = null) {
   const current = normaliseState(state);
   if (!current.active) return { state: current, completed: null, started: null };
 
+  // answerTs[i] is the DM message that gave answers[i], so a later edit of
+  // that message can find which answer to replace
   const answers = [...current.active.answers, text.trim()];
-  const active = { ...current.active, answers };
+  const answerTs = [...(current.active.answerTs || []), messageTs];
+  const active = { ...current.active, answers, answerTs };
 
   if (answers.length < questions.length) {
     return { state: { active, queue: current.queue }, completed: null, started: null };
@@ -120,6 +124,30 @@ function recordAnswer(state, questions, text) {
   // Finished – promote the next queued survey, if any
   const [next = null, ...rest] = current.queue;
   return { state: { active: next, queue: rest }, completed: active, started: next };
+}
+
+/**
+ * Applies an edit to one of the person's in-progress answers. Returns
+ * `changed: false` if the edited message isn't an answer to the active
+ * survey (e.g. it was the answer to a finished one).
+ *
+ * @param {object} state
+ * @param {string} messageTs - ts of the edited DM message
+ * @param {string} text      - The new text
+ * @returns {{ state: object, changed: boolean }}
+ *
+ * @example
+ * editAnswer({ active: { ...run, answers: ['Typo'], answerTs: ['1.0'] }, queue: [] }, '1.0', 'Fixed')
+ * // → { state: { active: { ...run, answers: ['Fixed'], answerTs: ['1.0'] }, queue: [] }, changed: true }
+ */
+function editAnswer(state, messageTs, text) {
+  const current = normaliseState(state);
+  const index = (current.active?.answerTs || []).indexOf(messageTs);
+  if (!messageTs || index === -1) return { state: current, changed: false };
+
+  const answers = [...current.active.answers];
+  answers[index] = text.trim();
+  return { state: { active: { ...current.active, answers }, queue: current.queue }, changed: true };
 }
 
 /**
@@ -161,6 +189,7 @@ module.exports = {
   enqueueSurvey,
   currentQuestion,
   recordAnswer,
+  editAnswer,
   removeSurvey,
   renameSurveyInState,
   expireStaleRuns,

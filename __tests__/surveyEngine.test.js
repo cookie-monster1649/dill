@@ -114,7 +114,7 @@ describe('recordAnswer', () => {
     state = recordAnswer(state, QUESTIONS, 'A1').state;
 
     const result = recordAnswer(state, QUESTIONS, 'A2');
-    expect(result.completed).toEqual({ ...RUN, answers: ['A1', 'A2'] });
+    expect(result.completed).toMatchObject({ ...RUN, answers: ['A1', 'A2'] });
     expect(result.started).toEqual({ ...OTHER, answers: [] });
     expect(result.state.active.name).toBe('Check-in');
   });

@@ -175,3 +175,44 @@ describe('Slack text escaping', () => {
     expect(value.length).toBeLessThanOrEqual(3000);
   });
 });
+
+// ── Editing DM replies ────────────────────────────────────────────────────────
+
+describe('editing a DM reply', () => {
+  const edit = (bot, user, ts, text) => handleSurveyDm(bot, {
+    message: { channel_type: 'im', channel: 'D1', subtype: 'message_changed', message: { user, ts, text }, previous_message: { user, ts } },
+  });
+
+  test('before finishing: the edited text is what gets posted', async () => {
+    const bot = makeBot();
+    const [u] = bot.members;
+    await surveyTick(bot);
+    await reply(bot, u, 'Typo', { ts: '10.0' });
+    await edit(bot, u, '10.0', 'Fixed');
+    await reply(bot, u, 'A2', { ts: '11.0' });
+
+    const [post] = bot.app.client.chat.postMessage.mock.calls.map(([a]) => a).filter(a => a.channel === 'C1');
+    expect(post.blocks[1].text.text).toBe('*Q1*\nFixed');
+  });
+
+  test('after finishing: the channel post is updated in place', async () => {
+    const bot = makeBot();
+    const [u] = bot.members;
+    await surveyTick(bot);
+    await reply(bot, u, 'A1', { ts: '10.0' });
+    await reply(bot, u, 'Typo', { ts: '11.0' });
+    await edit(bot, u, '11.0', 'Fixed');
+
+    const update = bot.app.client.chat.update.mock.calls.map(([a]) => a).find(a => a.channel === 'C1');
+    expect(update.blocks[2].text.text).toBe('*Q2*\nFixed');
+    expect(bot.app.client.chat.postMessage.mock.calls.filter(([a]) => a.channel === 'C1')).toHaveLength(1);
+  });
+
+  test('edits to unrelated DMs are ignored', async () => {
+    const bot = makeBot();
+    const [u] = bot.members;
+    await edit(bot, u, '99.0', 'whatever');
+    expect(bot.app.client.chat.postMessage).not.toHaveBeenCalled();
+    expect(bot.app.client.chat.update).not.toHaveBeenCalled();
+  });
+});

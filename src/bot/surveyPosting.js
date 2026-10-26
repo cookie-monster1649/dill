@@ -152,7 +152,7 @@ async function postLocked(bot, survey, completed, userId) {
   // Posts older than the thread window are dropped to keep backups small.
   const key = surveyKey(completed.channel, completed.name);
   const posts = pruneByDate(bot.surveyStateStore.getItem('posts', key) || {}, completed.date, post => post.date);
-  posts[userId] = { date: completed.date, ts, answers: completed.answers };
+  posts[userId] = { date: completed.date, ts, answers: completed.answers, answerTs: completed.answerTs || [] };
   bot.surveyStateStore.setItem('posts', key, posts);
   bot.surveyStateStore.save();
 }
@@ -168,6 +168,26 @@ async function postLocked(bot, survey, completed, userId) {
  */
 function getLatestPost(bot, channel, name, userId) {
   return (bot.surveyStateStore.getItem('posts', surveyKey(channel, name)) || {})[userId] || null;
+}
+
+/**
+ * Finds which posted answer a DM message produced, across every survey the
+ * person has a latest post in.
+ *
+ * @example
+ * findPostByAnswerTs(bot, 'U1', '1730000000.000300')
+ * // → { channel: 'C1', name: 'Daily standup', index: 1, post: { ts, answers, answerTs, ... } }
+ */
+function findPostByAnswerTs(bot, userId, messageTs) {
+  const allPosts = bot.surveyStateStore.get('posts');
+  for (const [key, people] of Object.entries(allPosts)) {
+    const post = people?.[userId];
+    const index = (post?.answerTs || []).indexOf(messageTs);
+    if (index === -1) continue;
+    const [channel, name] = key.split('::');
+    return { channel, name, index, post };
+  }
+  return null;
 }
 
 // Saves where the "done" DM summary is so an edit can refresh it
@@ -217,4 +237,4 @@ async function updateLocked(bot, survey, channel, userId, answers) {
   }
 }
 
-module.exports = { postCompletedSurvey, recordDoneMessage, getLatestPost, updatePostedAnswers, formatDateLabel, pruneThreads };
+module.exports = { postCompletedSurvey, recordDoneMessage, findPostByAnswerTs, getLatestPost, updatePostedAnswers, formatDateLabel, pruneThreads };
