@@ -48,7 +48,9 @@
             "bot_events": [
                 "reaction_added",
                 "reaction_removed",
-                "message.im"
+                "message.im",
+                "message.channels",
+                "message.groups"
             ]
         },
         "interactivity": {

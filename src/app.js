@@ -18,6 +18,7 @@
 //   Daily surveys (send + post)    →  src/bot/surveyLifecycle.js, surveyPosting.js
 //   Survey DM answers              →  src/handlers/surveyDmHandlers.js
 //   Editing posted answers         →  src/handlers/surveyEditHandlers.js
+//   Summoning on replies           →  src/handlers/surveyReplyHandlers.js
 
 require('dotenv').config();
 
@@ -46,6 +47,7 @@ const { openLeaveModal, handleLeaveAddOpen, handleLeaveAddSubmit, handleLeaveRem
 const { handlePickNotesPreview, handlePreviewButton } = require('./handlers/pickNotesHandlers');
 const { startSurveyScheduler } = require('./bot/surveyLifecycle');
 const { handleSurveyDm }       = require('./handlers/surveyDmHandlers');
+const { handleSurveyReply }    = require('./handlers/surveyReplyHandlers');
 const { openSurveysTab, openSurveyForm, handleSurveySubmit, handleSurveyDelete } = require('./handlers/surveyHandlers');
 const { openEditAnswers, handleEditSubmit } = require('./handlers/surveyEditHandlers');
 
@@ -152,8 +154,12 @@ class DillBot {
     this.app.event('reaction_removed', async ({ event }) => handleSpeakingOrderReaction(this, event, false));
 
     // ── Survey answers ─────────────────────────────────────────────────────
-    // Every DM to Dill is treated as the answer to the person's current question
-    this.app.event('message', async (payload) => handleSurveyDm(this, { message: payload.event }));
+    // DMs answer the person's current question; channel thread replies on
+    // someone's answer post summon them
+    this.app.event('message', async ({ event }) => {
+      if (event.channel_type === 'im') return handleSurveyDm(this, { message: event });
+      return handleSurveyReply(this, { message: event });
+    });
 
     // ── Surveys tab / form ─────────────────────────────────────────────────
     this.app.action('open_surveys_tab', async (payload) => openSurveysTab(this, payload));

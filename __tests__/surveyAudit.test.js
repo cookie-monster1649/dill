@@ -216,3 +216,55 @@ describe('editing a DM reply', () => {
     expect(bot.app.client.chat.update).not.toHaveBeenCalled();
   });
 });
+
+// ── Summoning on replies ──────────────────────────────────────────────────────
+
+describe('replies to an answer post', () => {
+  const { handleSurveyReply } = require('../src/handlers/surveyReplyHandlers');
+  const threadReply = (bot, user, threadTs, text = 'nice!') => handleSurveyReply(bot, {
+    message: { channel_type: 'channel', channel: 'C1', ts: `${Math.random()}`, thread_ts: threadTs, user, text },
+  });
+
+  async function postedBy(bot, u) {
+    await surveyTick(bot);
+    await reply(bot, u, 'A1');
+    await reply(bot, u, 'A2');
+    return bot.surveyStateStore.getItem('posts', 'C1::Standup')[u].ts;
+  }
+  const summons = bot => bot.app.client.chat.postMessage.mock.calls.map(([a]) => a).filter(a => a.text?.startsWith('Summoning'));
+
+  test('summons the person once when someone else replies', async () => {
+    const bot = makeBot();
+    const [u] = bot.members;
+    const postTs = await postedBy(bot, u);
+
+    await threadReply(bot, 'U_BOB', postTs);
+    await threadReply(bot, 'U_CAROL', postTs);
+
+    expect(summons(bot)).toEqual([{ channel: 'C1', thread_ts: postTs, text: `Summoning <@${u}> :wand:` }]);
+  });
+
+  test('stays quiet for the person themselves, existing mentions and unrelated threads', async () => {
+    const bot = makeBot();
+    const [u] = bot.members;
+    const postTs = await postedBy(bot, u);
+
+    await threadReply(bot, u, postTs);
+    await threadReply(bot, 'U_BOB', postTs, `<@${u}> great work`);
+    await threadReply(bot, 'U_BOB', '123.456');
+    expect(summons(bot)).toHaveLength(0);
+  });
+
+  test('stays quiet in thread-per-day mode, where replies can’t be tied to one person', async () => {
+    const bot = makeBot();
+    bot.surveyStore.data.C1.Standup.postMode = 'thread';
+    const [u] = bot.members;
+    await surveyTick(bot);
+    await reply(bot, u, 'A1');
+    await reply(bot, u, 'A2');
+    const parentTs = bot.surveyStateStore.getItem('threads', 'C1::Standup')['2026-10-26'].ts;
+
+    await threadReply(bot, 'U_BOB', parentTs);
+    expect(summons(bot)).toHaveLength(0);
+  });
+});

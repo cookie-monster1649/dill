@@ -15,6 +15,7 @@ const { DateTime } = require('luxon');
 const { slackApiCall } = require('../utils/slackHelpers');
 const { POST_MODES, buildAnswerMessage, buildThreadParentBlocks, buildDoneBlocks, buildDoneText } = require('../utils/surveyBlocks');
 const { surveyKey, getUserProfile } = require('./surveyLifecycle');
+const { indexAnswerPost } = require('../handlers/surveyReplyHandlers');
 
 // Thread parents older than this are forgotten to keep state small
 const THREAD_RETENTION_DAYS = 7;
@@ -88,6 +89,8 @@ async function postIndividual(bot, survey, completed, userId) {
     ...(await answerMessage(bot, survey, userId, completed.answers)),
     ...(await authorFields(bot, userId)),
   });
+  // So replies in this post's thread can summon the person
+  indexAnswerPost(bot, completed.channel, result.ts, userId, completed.date);
   return result.ts;
 }
 
