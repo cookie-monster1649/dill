@@ -15,6 +15,10 @@
 //   Button/modal callbacks         →  src/handlers/actionHandlers.js
 //   Leave calendar UI              →  src/handlers/leaveHandlers.js
 //   Pick message preview           →  src/handlers/pickNotesHandlers.js
+//   Daily surveys (send + post)    →  src/bot/surveyLifecycle.js, surveyPosting.js
+//   Survey DM answers              →  src/handlers/surveyDmHandlers.js
+//   Editing posted answers         →  src/handlers/surveyEditHandlers.js
+//   Summoning on replies           →  src/handlers/surveyReplyHandlers.js
 
 require('dotenv').config();
 
@@ -41,6 +45,11 @@ const { handleHelpCommand, handleStatusCommand, handleResetCommand, handlePickCo
 const { handleRestoreBackupCommand, handleDeleteBackupCommand, handleDeleteBackupConfirm, handleKillKillKillCommand } = require('./commands/backupCommands');
 const { openLeaveModal, handleLeaveAddOpen, handleLeaveAddSubmit, handleLeaveRemove } = require('./handlers/leaveHandlers');
 const { handlePickNotesPreview, handlePreviewButton } = require('./handlers/pickNotesHandlers');
+const { startSurveyScheduler } = require('./bot/surveyLifecycle');
+const { handleSurveyDm }       = require('./handlers/surveyDmHandlers');
+const { handleSurveyReply }    = require('./handlers/surveyReplyHandlers');
+const { openSurveysTab, openSurveyForm, handleSurveySubmit, handleSurveyDelete } = require('./handlers/surveyHandlers');
+const { openEditAnswers, handleEditSubmit, openAnythingElse, handleAnythingElse } = require('./handlers/surveyEditHandlers');
 
 const config = require('../config');
 
@@ -57,6 +66,8 @@ class DillBot {
     this.queueStore    = new NestedStore('rotations.json');
     this.stateStore    = new NestedStore('activestate.json');
     this.leaveStore    = new NestedStore('leave.json');
+    this.surveyStore      = new NestedStore('surveys.json');
+    this.surveyStateStore = new NestedStore('surveystate.json');
 
     this.analyticsService  = new AnalyticsService(config.ANALYTICS_RETENTION_DAYS);
     this.schedulerService  = new SchedulerService();
@@ -142,6 +153,25 @@ class DillBot {
     this.app.event('reaction_added',   async ({ event }) => handleSpeakingOrderReaction(this, event, true));
     this.app.event('reaction_removed', async ({ event }) => handleSpeakingOrderReaction(this, event, false));
 
+    // ── Survey answers ─────────────────────────────────────────────────────
+    // DMs answer the person's current question; channel thread replies on
+    // someone's answer post summon them
+    this.app.event('message', async ({ event }) => {
+      if (event.channel_type === 'im') return handleSurveyDm(this, { message: event });
+      return handleSurveyReply(this, { message: event });
+    });
+
+    // ── Surveys tab / form ─────────────────────────────────────────────────
+    this.app.action('open_surveys_tab', async (payload) => openSurveysTab(this, payload));
+    this.app.action('create_survey',    async (payload) => openSurveyForm(this, payload));
+    this.app.action('edit_survey',      async (payload) => openSurveyForm(this, payload));
+    this.app.view('dill_survey_form',   async (payload) => handleSurveySubmit(this, payload));
+    this.app.action('survey_danger_delete', async (payload) => handleSurveyDelete(this, payload));
+    this.app.action('survey_edit_answers',       async (payload) => openEditAnswers(this, payload));
+    this.app.view('survey_edit_answers_submit',  async (payload) => handleEditSubmit(this, payload));
+    this.app.action('survey_add_more',           async (payload) => openAnythingElse(this, payload));
+    this.app.view('survey_add_more_submit',      async (payload) => handleAnythingElse(this, payload));
+
     // ── Leave actions / views ──────────────────────────────────────────────
     // Both tab buttons use views.update to swap the modal content in place,
     // so the user never sees a second modal opening on top of the first.
@@ -220,7 +250,7 @@ class DillBot {
     this.persistentStorageService = new PersistentStorageService(
       this.app.client,
       storageChannelId,
-      { configStore: this.configStore, queueStore: this.queueStore, stateStore: this.stateStore, analyticsService: this.analyticsService, leaveStore: this.leaveStore },
+      { configStore: this.configStore, queueStore: this.queueStore, stateStore: this.stateStore, analyticsService: this.analyticsService, leaveStore: this.leaveStore, surveyStore: this.surveyStore, surveyStateStore: this.surveyStateStore },
       config
     );
 
@@ -233,14 +263,36 @@ class DillBot {
     }
   }
 
-  async createBackup() {
-    if (this.persistentStorageService) {
+  /**
+   * Backs up all stores to Slack. Calls are coalesced: if a backup is
+   * already running, one more runs straight after it (capturing every change
+   * made meanwhile) and all waiting callers share it. Without this, two
+   * overlapping backups could finish out of order and leave an older
+   * snapshot as the latest – which is what gets restored after a restart.
+   */
+  createBackup() {
+    if (!this.persistentStorageService) return Promise.resolve();
+    if (this._pendingBackup) return this._pendingBackup;
+
+    const runBackup = async () => {
       try {
         await this.persistentStorageService.createBackup();
       } catch (error) {
         console.error('[ERROR] Failed to create backup:', error);
       }
-    }
+    };
+
+    // Queue behind the running backup (if any); later callers join this one
+    const pending = (this._runningBackup || Promise.resolve()).then(() => {
+      this._pendingBackup = null;
+      this._runningBackup = runBackup().finally(() => {
+        if (this._runningBackup === running) this._runningBackup = null;
+      });
+      const running = this._runningBackup;
+      return running;
+    });
+    this._pendingBackup = pending;
+    return pending;
   }
 
   // ── Startup ──────────────────────────────────────────────────────────────────
@@ -252,6 +304,7 @@ class DillBot {
 
     await this.initializePersistentStorage();
     this.scheduleAll();
+    this.surveyJob = startSurveyScheduler(this);
     startHttpServer(this);
     setupGracefulShutdown(this);
 

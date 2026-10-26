@@ -94,8 +94,13 @@ Go to [api.slack.com/apps](https://api.slack.com/apps) and create a new app **fr
 | `groups:write` | Manage private channels Dill is in |
 | `channels:join` | Join public channels when a pick is triggered |
 | `reactions:read` | Read :x: reactions on speaking-order lists |
+| `im:history` | Read survey answers people send Dill by DM |
+| `reactions:write` | React to thanks / "bad bot" DMs to Dill |
+| `chat:write.customize` | Post survey answers with the person's name and avatar |
 
-**Subscribe to bot events** under *Features → Event Subscriptions*: `reaction_added` and `reaction_removed` (used by speaking-order lists).
+**Subscribe to bot events** under *Features → Event Subscriptions*: `reaction_added` and `reaction_removed` (used by speaking-order lists), `message.im` (survey answers) and `message.channels` / `message.groups` (summoning people when someone replies to their survey post).
+
+**Allow DMs** under *Features → App Home*: tick *Allow users to send Slash commands and messages from the messages tab*, or nobody can reply to a survey.
 
 Alternatively, paste [`slack-app-manifest.json`](slack-app-manifest.json) into *App Manifest* to configure all of the above in one go.
 
@@ -281,6 +286,25 @@ Tick **Post a speaking order list** on any rotation to post a shuffled, numbered
 - **Leave** – members on leave that day are left off
 - **Opting out** – anyone who reacts :x: to the list is removed and the numbers close up. Removing the reaction puts them back in their original spot
 - **Post Speaking Order Now** – posts the list immediately, handy for testing
+
+---
+
+## Daily surveys
+
+Async standups in the style of Geekbot. Open `/dill` in the channel where answers should appear and choose **Surveys → New Survey**.
+
+- **Who and when** – pick the people, days and a time. Each person gets a DM at that time **in their own Slack timezone**
+- **Answering** – Dill asks one question at a time in the DM, and each reply answers the current question
+- **Posting** – when someone finishes, their answers post to the channel, either as replies in **one thread per day** (the parent shows who's still to answer) or as **one message per person**. Posts show the person's name and avatar
+- **Replies** – in one-message-per-person mode, the first reply from someone else under a person's post makes Dill reply "Summoning @person :wand:", since Slack doesn't notify them about replies to a post Dill made for them
+- **Say something else** – the "Thanks!" DM also has a **Say something else** button that asks "Anything else?" and adds the reply to the end of the post. Adding again appends; **Edit answers** can change or clear it
+- **Non-answers** – answers like "no", "nope", "n/a", "skip" or "no blockers" are left out of the channel post (the person's DM summary still shows them, marked as not posted). Longer answers such as "No, but the deploy is stuck" are kept
+- **Banter** – outside a survey, short DMs to Dill get a response: "thanks" or "good bot" gets :heart:, "bad bot" gets :cry:, and anything really rude gets "I'm going to report this to HR. BRB"
+- **Editing** – edit any of your DM replies in Slack and the change is used, whether you're still answering or already posted. The "Thanks!" DM also has an **Edit answers** button. Either way the channel post updates in place
+- **Reminders** – optionally, anyone who hasn't finished by the reminder time (again in their own timezone) gets one follow-up DM that repeats the question they're on
+- **Leave** – people on leave in that channel aren't sent the survey
+- **Catch-up** – if Dill was offline at send time, it still sends the survey up to 2 hours late, but no later
+- **Overlaps** – if two surveys are due at once, the second waits until the first is finished. A new day's survey replaces yesterday's unfinished one
 
 ---
 

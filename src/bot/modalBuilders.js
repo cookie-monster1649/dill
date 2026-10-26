@@ -13,6 +13,7 @@ const {
 const { isUserOnLeave } = require("./leaveHelpers");
 const { nextPickTime } = require("../utils/pickSchedule");
 const { DateTime } = require("luxon");
+const { buildTabRow } = require("./surveyModalBuilders");
 
 // ── Main Overview Modal ───────────────────────────────────────────────────────
 
@@ -163,26 +164,8 @@ async function buildRotationsViewBlocks(bot, channel) {
   const blocks = [];
 
   // ── Tab navigation ────────────────────────────────────────────────────────
-  // Slack has no native tabs; simulated with a two-button row at the top.
-  // "Rotations" is primary (highlighted) because we're on the Rotations view.
-  blocks.push({
-    type: "actions",
-    elements: [
-      {
-        type: "button",
-        text: { type: "plain_text", text: "Rotations" },
-        action_id: "open_rotations_tab",
-        style: "primary",
-        value: channel,
-      },
-      {
-        type: "button",
-        text: { type: "plain_text", text: "Leave Calendar" },
-        action_id: "open_leave_tab",
-        value: channel,
-      },
-    ],
-  });
+  // Slack has no native tabs; see buildTabRow in surveyModalBuilders.js.
+  blocks.push(buildTabRow(channel, "rotations"));
   blocks.push({ type: "divider" });
 
   const validRotations = rotationNames.filter((r) => {

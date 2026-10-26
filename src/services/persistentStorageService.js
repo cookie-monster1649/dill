@@ -57,7 +57,9 @@ class PersistentStorageService {
         rotations: rotations,
         activestate: this.stores.stateStore.data || {},
         analytics: this.stores.analyticsService?.analyticsStore.data || {},
-        leave: this.stores.leaveStore?.data || {}
+        leave: this.stores.leaveStore?.data || {},
+        surveys: this.stores.surveyStore?.data || {},
+        surveystate: this.stores.surveyStateStore?.data || {}
       },
       metadata: {
         totalChannels: Object.keys(this.stores.configStore.data || {}).length,
@@ -471,6 +473,18 @@ class PersistentStorageService {
         this.stores.leaveStore.data = dump.data.leave;
         this.stores.leaveStore.save();
         console.log('[INFO] Restored leave store');
+      }
+
+      // Guard for older backups that pre-date daily surveys
+      if (dump.data.surveys && this.stores.surveyStore) {
+        this.stores.surveyStore.data = dump.data.surveys;
+        this.stores.surveyStore.save();
+        console.log('[INFO] Restored surveys store');
+      }
+      if (dump.data.surveystate && this.stores.surveyStateStore) {
+        this.stores.surveyStateStore.data = dump.data.surveystate;
+        this.stores.surveyStateStore.save();
+        console.log('[INFO] Restored survey state store');
       }
 
       this.lastBackupTimestamp = dump.timestamp;
