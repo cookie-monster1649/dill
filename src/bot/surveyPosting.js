@@ -13,7 +13,7 @@
 
 const { DateTime } = require('luxon');
 const { slackApiCall } = require('../utils/slackHelpers');
-const { POST_MODES, buildAnswerBlocks, buildThreadParentBlocks, buildDoneBlocks, buildDoneText } = require('../utils/surveyBlocks');
+const { POST_MODES, buildAnswerMessage, buildThreadParentBlocks, buildDoneBlocks, buildDoneText } = require('../utils/surveyBlocks');
 const { surveyKey, getUserProfile } = require('./surveyLifecycle');
 
 // Thread parents older than this are forgotten to keep state small
@@ -74,13 +74,18 @@ async function authorFields(bot, userId) {
   return name ? { username: name, ...(avatar ? { icon_url: avatar } : {}) } : {};
 }
 
+// The answer message, introduced with the person's name like Geekbot
+async function answerMessage(bot, survey, userId, answers) {
+  const { realName } = (await getUserProfile(bot, userId)) || {};
+  return buildAnswerMessage(survey, { userId, name: realName }, answers);
+}
+
 // ── Individual mode ───────────────────────────────────────────────────────────
 
 async function postIndividual(bot, survey, completed, userId) {
   const result = await slackApiCall(bot.app.client.chat.postMessage, {
     channel: completed.channel,
-    text: `${survey.name} answers from <@${userId}>`,
-    blocks: buildAnswerBlocks(survey, userId, completed.answers),
+    ...(await answerMessage(bot, survey, userId, completed.answers)),
     ...(await authorFields(bot, userId)),
   });
   return result.ts;
@@ -118,8 +123,7 @@ async function postInThread(bot, survey, completed, userId) {
   const reply = await slackApiCall(bot.app.client.chat.postMessage, {
     channel,
     thread_ts: ts,
-    text: `${name} answers from <@${userId}>`,
-    blocks: buildAnswerBlocks(survey, userId, completed.answers),
+    ...(await answerMessage(bot, survey, userId, completed.answers)),
     ...(await authorFields(bot, userId)),
   });
 
@@ -216,8 +220,7 @@ async function updateLocked(bot, survey, channel, userId, answers) {
   await slackApiCall(bot.app.client.chat.update, {
     channel,
     ts: post.ts,
-    text: `${survey.name} answers from <@${userId}>`,
-    blocks: buildAnswerBlocks(survey, userId, answers),
+    ...(await answerMessage(bot, survey, userId, answers)),
   });
 
   const key = surveyKey(channel, survey.name);

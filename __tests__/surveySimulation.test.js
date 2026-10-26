@@ -163,6 +163,6 @@ describe('people finishing at the same moment', () => {
 
     const posts = bot.app.client.chat.postMessage.mock.calls.map(([a]) => a).filter(a => a.channel === 'C1');
     expect(posts).toHaveLength(1);
-    expect(posts[0].blocks.slice(1).map(b => b.text.text)).toEqual(['*Q1*\none', '*Q2*\ntwo', '*Q3*\nthree']);
+    expect(posts[0].attachments.map(a => a.blocks[0].text.text)).toEqual(['*Q1*\none', '*Q2*\ntwo', '*Q3*\nthree']);
   });
 });

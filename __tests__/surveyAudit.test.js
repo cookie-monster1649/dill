@@ -76,7 +76,7 @@ describe('restarts', () => {
 
     await reply(restored, u, 'A2');
     const [post] = restored.app.client.chat.postMessage.mock.calls.map(([a]) => a).filter(a => a.channel === 'C1');
-    expect(post.blocks.slice(1).map(b => b.text.text)).toEqual(['*Q1*\nA1', '*Q2*\nA2']);
+    expect(post.attachments.map(a => a.blocks[0].text.text)).toEqual(['*Q1*\nA1', '*Q2*\nA2']);
   });
 });
 
@@ -192,7 +192,7 @@ describe('editing a DM reply', () => {
     await reply(bot, u, 'A2', { ts: '11.0' });
 
     const [post] = bot.app.client.chat.postMessage.mock.calls.map(([a]) => a).filter(a => a.channel === 'C1');
-    expect(post.blocks[1].text.text).toBe('*Q1*\nFixed');
+    expect(post.attachments[0].blocks[0].text.text).toBe('*Q1*\nFixed');
   });
 
   test('after finishing: the channel post is updated in place', async () => {
@@ -204,7 +204,7 @@ describe('editing a DM reply', () => {
     await edit(bot, u, '11.0', 'Fixed');
 
     const update = bot.app.client.chat.update.mock.calls.map(([a]) => a).find(a => a.channel === 'C1');
-    expect(update.blocks[2].text.text).toBe('*Q2*\nFixed');
+    expect(update.attachments[1].blocks[0].text.text).toBe('*Q2*\nFixed');
     expect(bot.app.client.chat.postMessage.mock.calls.filter(([a]) => a.channel === 'C1')).toHaveLength(1);
   });
 

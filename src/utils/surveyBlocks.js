@@ -140,24 +140,30 @@ function buildIdleText() {
 
 // ── Channel posts ─────────────────────────────────────────────────────────────
 
+// Left-bar colours for each question's attachment, cycled in order – soft
+// tones like Geekbot's so a long post stays easy to scan
+const QUESTION_COLOURS = ['#9FD3D0', '#8FA0C4', '#E8B38A', '#B9A3D6', '#A8C99B', '#E0A3B5'];
+
 /**
- * One person's completed answers.
+ * One person's completed answers, laid out like Geekbot: a plain intro line,
+ * then each question and answer in its own attachment with a coloured left
+ * bar. Spread the result into chat.postMessage / chat.update.
  *
- * @param {object}   survey - { name, questions: ['Q1', 'Q2'] }
- * @param {string}   userId
+ * @param {object}   survey     - { name, questions: ['Q1', 'Q2'] }
+ * @param {object}   author     - { userId: 'U1', name: 'Alex Smith' } (name may be missing)
  * @param {string[]} answers
- * @returns {object[]} Block Kit blocks
+ * @returns {{ text: string, blocks: object[], attachments: object[] }}
  *
  * @example
- * buildAnswerBlocks({ name: 'Standup', questions: ['Yesterday?'] }, 'U1', ['Shipped it'])
- * // → [ { section "<@U1> posted *Standup*" },
- * //     { section "*Yesterday?*\nShipped it" } ]
+ * buildAnswerMessage({ name: 'Standup', questions: ['Yesterday?'] }, { userId: 'U1', name: 'Alex' }, ['Shipped it'])
+ * // → { text: 'Alex posted an update for Standup',
+ * //     blocks: [ section "Alex posted an update for *Standup*" ],
+ * //     attachments: [ { color: '#9FD3D0', blocks: [ section "*Yesterday?*\nShipped it" ] } ] }
  */
-function buildAnswerBlocks(survey, userId, answers) {
-  const header = {
-    type: 'section',
-    text: { type: 'mrkdwn', text: `<@${userId}> posted *${survey.name}*` },
-  };
+function buildAnswerMessage(survey, author, answers) {
+  // Falls back to a mention if Slack didn't give us a name
+  const who = author.name || `<@${author.userId}>`;
+  const intro = `${who} posted an update for *${survey.name}*`;
 
   // "No" / "nope" / "n/a" answers are left out of the channel post
   const sections = buildAnswerSections(survey.questions, answers, { hideEmpty: true });
@@ -165,7 +171,14 @@ function buildAnswerBlocks(survey, userId, answers) {
     ? sections
     : [{ type: 'section', text: { type: 'mrkdwn', text: '_Nothing to report._' } }];
 
-  return [header, ...body];
+  return {
+    text: `${who} posted an update for ${survey.name}`,
+    blocks: [{ type: 'section', text: { type: 'mrkdwn', text: intro } }],
+    attachments: body.map((section, i) => ({
+      color: QUESTION_COLOURS[i % QUESTION_COLOURS.length],
+      blocks: [section],
+    })),
+  };
 }
 
 /**
@@ -222,6 +235,6 @@ module.exports = {
   buildDoneBlocks,
   buildEditAnswersView,
   buildIdleText,
-  buildAnswerBlocks,
+  buildAnswerMessage,
   buildThreadParentBlocks,
 };

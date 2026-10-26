@@ -58,7 +58,7 @@ const profileCache = new Map();
  *
  * @example
  * await getUserProfile(bot, 'U1')
- * // → { tz: 'Australia/Sydney', name: 'JJ Monester', avatar: 'https://avatars.slack-edge.com/…_72.png' }
+ * // → { tz: 'Australia/Sydney', name: 'jj', realName: 'JJ Monester', avatar: 'https://avatars.slack-edge.com/…_72.png' }
  */
 async function getUserProfile(bot, userId) {
   const cached = profileCache.get(userId);
@@ -68,7 +68,10 @@ async function getUserProfile(bot, userId) {
     const { user } = await bot.app.client.users.info({ user: userId });
     const profile = {
       tz: user?.tz,
+      // Display name for the message author (e.g. 'ags'), full name for the
+      // "Alex Smith posted an update…" intro – as Geekbot does
       name: user?.profile?.display_name || user?.real_name || user?.name,
+      realName: user?.real_name || user?.profile?.real_name || user?.profile?.display_name || user?.name,
       avatar: user?.profile?.image_72,
       deleted: user?.deleted === true,
       isBot: user?.is_bot === true || user?.id === 'USLACKBOT',

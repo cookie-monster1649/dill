@@ -94,7 +94,7 @@ describe('handleSurveyDm', () => {
     const [parent, answer] = sentTo(bot, 'C1');
     expect(parent.blocks[1].elements[0].text).toBe('1/2 answered · Waiting on <@U2>');
     expect(answer.thread_ts).toBe(bot.surveyStateStore.getItem('threads', 'C1::Standup')['2026-10-26'].ts);
-    expect(answer.blocks[1].text.text).toBe('*Q1*\nShipped login');
+    expect(answer.attachments[0].blocks[0].text.text).toBe('*Q1*\nShipped login');
     expect(sentTo(bot, 'U1').at(-1).text).toContain('Thanks!');
   });
 
@@ -176,7 +176,7 @@ describe('posting as the person and editing', () => {
 
     const update = bot.app.client.chat.update.mock.calls.map(([a]) => a).find(a => a.channel === 'C1');
     expect(update.ts).toBe(postTs);
-    expect(update.blocks[1].text.text).toBe('*Q1*\nA1 fixed');
+    expect(update.attachments[0].blocks[0].text.text).toBe('*Q1*\nA1 fixed');
     expect(sentTo(bot, 'C1')).toHaveLength(1); // no new post
 
     // The DM summary is refreshed too, since Dill can't edit the person's own replies

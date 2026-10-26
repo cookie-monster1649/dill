@@ -4,7 +4,10 @@
 const { DateTime } = require('luxon');
 const { isSurveyDue, minutesSinceSendTime, nowInZone, CATCH_UP_MINUTES } = require('../src/utils/surveySchedule');
 const { enqueueSurvey, currentQuestion, recordAnswer, removeSurvey, isIdle } = require('../src/utils/surveyConversation');
-const { buildAnswerBlocks, buildThreadParentBlocks, buildQuestionText, buildDoneBlocks } = require('../src/utils/surveyBlocks');
+const { buildAnswerMessage, buildThreadParentBlocks, buildQuestionText, buildDoneBlocks } = require('../src/utils/surveyBlocks');
+
+// The question/answer text of each coloured attachment
+const answerTexts = msg => msg.attachments.map(a => a.blocks[0].text.text);
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -152,30 +155,35 @@ describe('survey blocks', () => {
     expect(buildQuestionText('Blockers?', 2, 3)).toBe('*3/3* Blockers?');
   });
 
-  test('answer blocks pair each question with its answer', () => {
-    const blocks = buildAnswerBlocks({ name: 'Standup', questions: ['Q1', 'Q2'] }, 'U1', ['A1']);
-    expect(blocks[0].text.text).toBe('<@U1> posted *Standup*');
-    expect(blocks[1].text.text).toBe('*Q1*\nA1');
-    expect(blocks).toHaveLength(2); // the missing Q2 answer is left out
+  test('posts like Geekbot: a named intro, then one coloured attachment per answer', () => {
+    const msg = buildAnswerMessage({ name: 'Standup', questions: ['Q1', 'Q2', 'Q3'] }, { userId: 'U1', name: 'Alex Smith' }, ['A1', 'A2']);
+    expect(msg.blocks[0].text.text).toBe('Alex Smith posted an update for *Standup*');
+    expect(answerTexts(msg)).toEqual(['*Q1*\nA1', '*Q2*\nA2']); // the missing Q3 answer is left out
+    expect(msg.attachments[0].color).not.toBe(msg.attachments[1].color);
+  });
+
+  test('falls back to a mention when the name is unknown', () => {
+    const msg = buildAnswerMessage({ name: 'Standup', questions: ['Q1'] }, { userId: 'U1' }, ['A1']);
+    expect(msg.blocks[0].text.text).toBe('<@U1> posted an update for *Standup*');
   });
 
   test('non-answers are hidden from the post but marked in the DM summary', () => {
     const survey = { name: 'Standup', questions: ['Yesterday?', 'Blockers?'] };
-    const post = buildAnswerBlocks(survey, 'U1', ['Shipped it', 'Nope!']);
-    expect(post.map(b => b.text.text)).toEqual(['<@U1> posted *Standup*', '*Yesterday?*\nShipped it']);
+    const post = buildAnswerMessage(survey, { userId: 'U1', name: 'Alex' }, ['Shipped it', 'Nope!']);
+    expect(answerTexts(post)).toEqual(['*Yesterday?*\nShipped it']);
 
     const summary = buildDoneBlocks(survey, 'C1', '2026-10-26', ['Shipped it', 'Nope!']);
     expect(summary[2].text.text).toBe('*Blockers?*\nNope!  _(not posted)_');
   });
 
   test('a post where every answer is a non-answer says so', () => {
-    const post = buildAnswerBlocks({ name: 'S', questions: ['Q1', 'Q2'] }, 'U1', ['no', 'n/a']);
-    expect(post[1].text.text).toBe('_Nothing to report._');
+    const post = buildAnswerMessage({ name: 'S', questions: ['Q1', 'Q2'] }, { userId: 'U1' }, ['no', 'n/a']);
+    expect(answerTexts(post)).toEqual(['_Nothing to report._']);
   });
 
   test('long answers are truncated to fit Slack limits', () => {
-    const blocks = buildAnswerBlocks({ name: 'S', questions: ['Q'] }, 'U1', ['x'.repeat(5000)]);
-    expect(blocks[1].text.text.length).toBeLessThanOrEqual(2900);
+    const msg = buildAnswerMessage({ name: 'S', questions: ['Q'] }, { userId: 'U1' }, ['x'.repeat(5000)]);
+    expect(answerTexts(msg)[0].length).toBeLessThanOrEqual(2900);
   });
 
   test('thread parent shows who is still to answer', () => {
