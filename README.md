@@ -300,6 +300,7 @@ Async standups in the style of Geekbot. Open `/dill` in the channel where answer
 - **Non-answers** – answers like "no", "nope", "n/a", "skip" or "no blockers" are left out of the channel post (the person's DM summary still shows them, marked as not posted). Longer answers such as "No, but the deploy is stuck" are kept
 - **Thanks** – a short "thanks" or "good bot" DM to Dill (outside a survey) gets a :heart: reaction
 - **Editing** – edit any of your DM replies in Slack and the change is used, whether you're still answering or already posted. The "Thanks!" DM also has an **Edit answers** button. Either way the channel post updates in place
+- **Reminders** – optionally, anyone who hasn't finished by the reminder time (again in their own timezone) gets one follow-up DM that repeats the question they're on
 - **Leave** – people on leave in that channel aren't sent the survey
 - **Catch-up** – if Dill was offline at send time, it still sends the survey up to 2 hours late, but no later
 - **Overlaps** – if two surveys are due at once, the second waits until the first is finished. A new day's survey replaces yesterday's unfinished one

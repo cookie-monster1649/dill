@@ -220,7 +220,16 @@ describe('parseSurveyForm', () => {
   test('builds a clean survey config', () => {
     expect(parseSurveyForm(values()).survey).toEqual({
       name: 'Standup', members: ['U1'], questions: ['Q1', 'Q2'], days: ['mon'], time: '09:30', postMode: 'individual',
+      reminder: { enabled: false, time: null },
     });
+  });
+
+  test('reads reminders and rejects a reminder before the survey time', () => {
+    const on = { survey_reminder_enabled: { value: { selected_options: [{ value: 'on' }] } } };
+    expect(parseSurveyForm(values({ ...on, survey_reminder_time: { value: { selected_time: '11:00' } } })).survey.reminder)
+      .toEqual({ enabled: true, time: '11:00' });
+    expect(parseSurveyForm(values({ ...on, survey_reminder_time: { value: { selected_time: '09:00' } } })).errors)
+      .toEqual({ survey_reminder_time: 'The reminder must be after the survey time.' });
   });
 
   test('reports missing fields', () => {

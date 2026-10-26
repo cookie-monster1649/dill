@@ -13,7 +13,7 @@ const { POST_MODES } = require('../utils/surveyBlocks');
 const { renameSurveyInState } = require('../utils/surveyConversation');
 
 // Per-survey runtime state that follows a rename and goes on delete
-const SURVEY_STATE_BUCKETS = ['sent', 'threads', 'posts'];
+const SURVEY_STATE_BUCKETS = ['sent', 'reminded', 'threads', 'posts'];
 
 // ── Form parsing ──────────────────────────────────────────────────────────────
 
@@ -27,7 +27,8 @@ const SURVEY_STATE_BUCKETS = ['sent', 'threads', 'posts'];
  * @example
  * parseSurveyForm(values)
  * // → { survey: { name: 'Daily standup', members: ['U1'], questions: ['Q1'],
- * //               days: ['mon'], time: '09:30', postMode: 'thread' } }
+ * //               days: ['mon'], time: '09:30', postMode: 'thread',
+ * //               reminder: { enabled: true, time: '11:00' } } }
  */
 function parseSurveyForm(values) {
   const v = (block) => values[block]?.value;
@@ -41,6 +42,8 @@ function parseSurveyForm(values) {
   const days = (v('survey_days')?.selected_options || []).map(o => o.value);
   const time = v('survey_time')?.selected_time;
   const postMode = v('survey_post_mode')?.selected_option?.value || POST_MODES.THREAD;
+  const reminderEnabled = (v('survey_reminder_enabled')?.selected_options || []).some(o => o.value === 'on');
+  const reminderTime = v('survey_reminder_time')?.selected_time;
 
   // ── Validation ──
   const errors = {};
@@ -50,9 +53,16 @@ function parseSurveyForm(values) {
   if (questions.length === 0) errors.survey_questions = 'Add at least one question.';
   if (days.length === 0) errors.survey_days = 'Pick at least one day.';
   if (!time) errors.survey_time = 'Pick a time.';
+  // 'HH:MM' strings compare correctly as text
+  if (reminderEnabled && !reminderTime) errors.survey_reminder_time = 'Pick a reminder time.';
+  if (reminderEnabled && reminderTime && time && reminderTime <= time) {
+    errors.survey_reminder_time = 'The reminder must be after the survey time.';
+  }
   if (Object.keys(errors).length > 0) return { errors };
 
-  return { survey: { name, members, questions, days, time, postMode } };
+  // The reminder time is kept when switched off so it's remembered next time
+  const reminder = { enabled: reminderEnabled, time: reminderTime || null };
+  return { survey: { name, members, questions, days, time, postMode, reminder } };
 }
 
 // ── Data changes ──────────────────────────────────────────────────────────────

@@ -52,6 +52,34 @@ function isSurveyDue(survey, nowInUserZone, lastSentDate) {
 }
 
 /**
+ * Decides whether a reminder should go to one person right now. Due when
+ * reminders are on, the person was sent today's survey, it's past the
+ * reminder time (within the catch-up window) and they haven't had one today.
+ * Whether they've already finished is the caller's check.
+ *
+ * @param {object}   survey          - { reminder: { enabled: true, time: '11:00' } }
+ * @param {DateTime} nowInUserZone
+ * @param {string}   [sentDate]      - ISO date they were last sent the survey
+ * @param {string}   [remindedDate]  - ISO date they were last reminded
+ * @returns {boolean}
+ *
+ * @example
+ * isReminderDue({ reminder: { enabled: true, time: '11:00' } },
+ *               <Mon 26 Oct 11:00 local>, '2026-10-26', undefined)
+ * // → true
+ */
+function isReminderDue(survey, nowInUserZone, sentDate, remindedDate) {
+  const reminder = survey?.reminder;
+  if (!reminder?.enabled || !reminder.time) return false;
+
+  const localDate = nowInUserZone.toISODate();
+  if (sentDate !== localDate || remindedDate === localDate) return false;
+
+  const minutesLate = minutesSinceSendTime(reminder.time, nowInUserZone);
+  return minutesLate >= 0 && minutesLate <= CATCH_UP_MINUTES;
+}
+
+/**
  * Minutes between today's send time and now, in the person's zone.
  * Negative before the send time.
  *
@@ -77,4 +105,4 @@ function nowInZone(tz, now = DateTime.now()) {
   return zoned.isValid ? zoned : now.setZone(FALLBACK_TZ);
 }
 
-module.exports = { CATCH_UP_MINUTES, isSurveyDue, minutesSinceSendTime, nowInZone };
+module.exports = { CATCH_UP_MINUTES, isSurveyDue, isReminderDue, minutesSinceSendTime, nowInZone };

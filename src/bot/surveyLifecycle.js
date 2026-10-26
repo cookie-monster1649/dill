@@ -12,14 +12,15 @@
 //
 // Runtime state lives in surveyStateStore:
 //   people  → userId → { active, queue }           (see utils/surveyConversation)
-//   sent    → "C1::Daily standup" → { U1: '2026-10-26' }
+//   sent     → "C1::Daily standup" → { U1: '2026-10-26' }
+//   reminded → "C1::Daily standup" → { U1: '2026-10-26' }
 //   threads → "C1::Daily standup" → { '2026-10-26': { ts, completed: ['U1'] } }
 
 const { CronJob } = require('cron');
 const { slackApiCall } = require('../utils/slackHelpers');
-const { isSurveyDue, nowInZone } = require('../utils/surveySchedule');
+const { isSurveyDue, isReminderDue, nowInZone } = require('../utils/surveySchedule');
 const { enqueueSurvey, currentQuestion } = require('../utils/surveyConversation');
-const { buildIntroText, buildQuestionText } = require('../utils/surveyBlocks');
+const { buildIntroText, buildQuestionText, buildReminderText } = require('../utils/surveyBlocks');
 const { isUserOnLeave } = require('./leaveHelpers');
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -129,6 +130,46 @@ async function sendSurveyTo(bot, channel, name, userId, isoDate) {
   if (startNow) await askFirstQuestion(bot, userId, run);
 }
 
+// ── Reminders ─────────────────────────────────────────────────────────────────
+
+/**
+ * Where a person is with today's copy of a survey: 'active' (answering it
+ * now), 'queued' (waiting behind another survey) or null (finished, or no
+ * longer pending).
+ */
+function pendingStatus(bot, userId, channel, name, isoDate) {
+  const state = getPersonState(bot, userId);
+  const matches = run => run && run.channel === channel && run.name === name && run.date === isoDate;
+  if (matches(state?.active)) return 'active';
+  if ((state?.queue || []).some(matches)) return 'queued';
+  return null;
+}
+
+/**
+ * Nudges someone who hasn't finished today's survey. Re-asks their current
+ * question so they can reply straight away. Recorded first so a failed DM
+ * can't repeat every minute.
+ */
+async function sendReminderTo(bot, channel, name, userId, isoDate) {
+  const key = surveyKey(channel, name);
+  const reminded = bot.surveyStateStore.getItem('reminded', key) || {};
+  bot.surveyStateStore.setItem('reminded', key, { ...reminded, [userId]: isoDate });
+  bot.surveyStateStore.save();
+
+  const status = pendingStatus(bot, userId, channel, name, isoDate);
+  if (!status) return false;
+
+  const activeName = getPersonState(bot, userId)?.active?.name;
+  await slackApiCall(bot.app.client.chat.postMessage, {
+    channel: userId,
+    text: buildReminderText(name, channel, status === 'queued' ? activeName : null),
+  });
+  if (status === 'active') await askCurrentQuestion(bot, userId, getSurvey(bot, channel, name));
+
+  console.log(`[INFO] Survey '${name}' reminder sent to ${userId} for ${isoDate}`);
+  return true;
+}
+
 /**
  * One minute's work: find every person who is due and send to them.
  * Errors for one person never stop the rest.
@@ -141,6 +182,7 @@ async function surveyTick(bot) {
     for (const [name, survey] of Object.entries(surveys || {})) {
       if (!survey?.questions?.length || !survey?.members?.length) continue;
       const sent = bot.surveyStateStore.getItem('sent', surveyKey(channel, name)) || {};
+      const reminded = bot.surveyStateStore.getItem('reminded', surveyKey(channel, name)) || {};
 
       for (const userId of survey.members) {
         try {
@@ -150,10 +192,15 @@ async function surveyTick(bot) {
           if (!profile) continue;
           if (profile.deleted || profile.isBot) continue;
           const now = nowInZone(profile.tz);
-          if (!isSurveyDue(survey, now, sent[userId])) continue;
-          if (isUserOnLeave(bot.leaveStore, channel, userId, now.toISODate())) continue;
-          await sendSurveyTo(bot, channel, name, userId, now.toISODate());
-          sentCount++;
+          const today = now.toISODate();
+
+          if (isSurveyDue(survey, now, sent[userId])) {
+            if (isUserOnLeave(bot.leaveStore, channel, userId, today)) continue;
+            await sendSurveyTo(bot, channel, name, userId, today);
+            sentCount++;
+          } else if (isReminderDue(survey, now, sent[userId], reminded[userId])) {
+            if (await sendReminderTo(bot, channel, name, userId, today)) sentCount++;
+          }
         } catch (error) {
           console.error(`[ERROR] Survey '${name}' failed for ${userId}:`, error);
         }
@@ -196,6 +243,7 @@ module.exports = {
   askFirstQuestion,
   askCurrentQuestion,
   sendSurveyTo,
+  sendReminderTo,
   surveyTick,
   startSurveyScheduler,
 };

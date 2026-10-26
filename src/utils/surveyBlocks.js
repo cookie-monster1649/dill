@@ -65,6 +65,21 @@ function buildQuestionText(question, index, total) {
   return `*${index + 1}/${total}* ${question}`;
 }
 
+/**
+ * Reminder for someone who hasn't finished today's survey. If it's queued
+ * behind another survey, says which one to finish first.
+ *
+ * @example
+ * buildReminderText('Daily standup', 'C123')
+ * // → ":wave: Reminder: you haven't finished *Daily standup* for <#C123> yet. …"
+ */
+function buildReminderText(name, channel, blockingName = null) {
+  const base = `:wave: Reminder: you haven't finished *${name}* for <#${channel}> yet.`;
+  return blockingName
+    ? `${base} It'll start as soon as you finish *${blockingName}*.`
+    : `${base} Just reply here to carry on.`;
+}
+
 function buildDoneText(name, channel) {
   return `Thanks! Your *${name}* answers are posted in <#${channel}>.`;
 }
@@ -232,6 +247,7 @@ module.exports = {
   buildIntroText,
   buildQuestionText,
   buildDoneText,
+  buildReminderText,
   buildDoneBlocks,
   buildEditAnswersView,
   buildIdleText,

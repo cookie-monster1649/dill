@@ -20,6 +20,11 @@ const POST_MODE_OPTIONS = [
     description: { type: 'plain_text', text: 'Each person’s answers post as their own message' } },
 ];
 
+const REMINDER_OPTION = {
+  text: { type: 'plain_text', text: 'Remind anyone who hasn’t finished' },
+  value: 'on',
+};
+
 const DEFAULT_QUESTIONS = [
   'What did you do since your last update?',
   'What are you working on today?',
@@ -81,9 +86,10 @@ function buildSurveysView(bot, channel) {
     const s = surveys[name];
     const days = (s.days || []).map(d => d[0].toUpperCase() + d.slice(1)).join(', ');
     const count = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+    const reminder = s.reminder?.enabled ? ` · Reminder at ${s.reminder.time}` : '';
     blocks.push({
       type: 'section',
-      text: { type: 'mrkdwn', text: `*${name}*\n${days} at ${s.time} (each person's time) · ${count(s.questions.length, 'question')} · ${s.members.length === 1 ? '1 person' : `${s.members.length} people`} · ${postModeLabel(s.postMode)}` },
+      text: { type: 'mrkdwn', text: `*${name}*\n${days} at ${s.time} (each person's time) · ${count(s.questions.length, 'question')} · ${s.members.length === 1 ? '1 person' : `${s.members.length} people`} · ${postModeLabel(s.postMode)}${reminder}` },
       accessory: { type: 'button', text: { type: 'plain_text', text: ':gear:', emoji: true }, action_id: 'edit_survey', value: name },
     });
   }
@@ -138,6 +144,12 @@ function buildSurveyFormView(channel, existing = null) {
     input('survey_days', 'Days', { type: 'multi_static_select', action_id: 'value', options: DAY_OPTIONS, initial_options: initialDays }),
     input('survey_time', 'Time', { type: 'timepicker', action_id: 'value', initial_time: s.time || '09:30' },
       { hint: { type: 'plain_text', text: 'Sent at this time in each person’s own Slack timezone' } }),
+    input('survey_reminder_enabled', 'Reminders', {
+      type: 'checkboxes', action_id: 'value', options: [REMINDER_OPTION],
+      ...(s.reminder?.enabled ? { initial_options: [REMINDER_OPTION] } : {}),
+    }, { optional: true }),
+    input('survey_reminder_time', 'Reminder time', { type: 'timepicker', action_id: 'value', initial_time: s.reminder?.time || '11:00' },
+      { optional: true, hint: { type: 'plain_text', text: 'Also in each person’s own timezone. Must be after the survey time.' } }),
     input('survey_post_mode', 'Post answers as', { type: 'radio_buttons', action_id: 'value', options: POST_MODE_OPTIONS, initial_option: initialMode }),
   ];
 

@@ -268,3 +268,57 @@ describe('replies to an answer post', () => {
     expect(summons(bot)).toHaveLength(0);
   });
 });
+
+// ── Reminders ─────────────────────────────────────────────────────────────────
+
+describe('reminders', () => {
+  function reminderBot() {
+    const bot = makeBot();
+    bot.surveyStore.data.C1.Standup.reminder = { enabled: true, time: '11:00' };
+    return bot;
+  }
+  const reminders = (bot, u) => dmsTo(bot, u).filter(m => m.text.includes('Reminder'));
+  // Mon 26 Oct, Sydney local time → UTC instant
+  const at = (hhmm) => jest.setSystemTime(new Date(`2026-10-26T${hhmm}:00+11:00`));
+
+  test('nudges someone who hasn’t finished, once, at their local reminder time, re-asking their question', async () => {
+    const bot = reminderBot();
+    const [u] = bot.members;
+    await surveyTick(bot);
+    await reply(bot, u, 'A1');
+
+    at('10:59'); await surveyTick(bot);
+    expect(reminders(bot, u)).toHaveLength(0);
+
+    at('11:00'); await surveyTick(bot);
+    at('11:01'); await surveyTick(bot);
+    expect(reminders(bot, u)).toHaveLength(1);
+    expect(dmsTo(bot, u).at(-1).text).toBe('*2/2* Q2');
+  });
+
+  test('does not nudge someone who already finished', async () => {
+    const bot = reminderBot();
+    const [u] = bot.members;
+    await surveyTick(bot);
+    await reply(bot, u, 'A1');
+    await reply(bot, u, 'A2');
+    at('11:00'); await surveyTick(bot);
+    expect(reminders(bot, u)).toHaveLength(0);
+  });
+
+  test('does nothing when reminders are off, or for people never sent the survey', async () => {
+    const off = makeBot();
+    const [u] = off.members;
+    await surveyTick(off);
+    at('11:00'); await surveyTick(off);
+    expect(reminders(off, u)).toHaveLength(0);
+
+    // Sent nothing today (e.g. on leave) → no reminder either
+    const leave = reminderBot();
+    const [v] = leave.members;
+    leave.leaveStore.data = { C1: { [v]: [{ startDate: '2026-10-26', endDate: '2026-10-26' }] } };
+    await surveyTick(leave);
+    at('11:00'); await surveyTick(leave);
+    expect(dmsTo(leave, v)).toHaveLength(0);
+  });
+});
