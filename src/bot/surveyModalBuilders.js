@@ -141,11 +141,29 @@ function buildSurveyFormView(channel, existing = null) {
     input('survey_post_mode', 'Post answers as', { type: 'radio_buttons', action_id: 'value', options: POST_MODE_OPTIONS, initial_option: initialMode }),
   ];
 
+  // Danger Zone – only when editing, styled like the rotation form's
   if (existing) {
-    blocks.push(input('survey_delete', 'Delete', {
-      type: 'checkboxes', action_id: 'value',
-      options: [{ text: { type: 'plain_text', text: 'Delete this survey' }, value: 'delete' }],
-    }, { optional: true }));
+    blocks.push(
+      { type: 'divider' },
+      { type: 'header', text: { type: 'plain_text', text: 'Danger Zone' } },
+      { type: 'context', elements: [{ type: 'mrkdwn', text: '_These actions are permanent and cannot be undone._' }] },
+      {
+        type: 'actions',
+        elements: [{
+          type: 'button',
+          style: 'danger',
+          action_id: 'survey_danger_delete',
+          text: { type: 'plain_text', text: 'Delete Survey' },
+          confirm: {
+            title: { type: 'plain_text', text: 'Delete survey?' },
+            text: { type: 'mrkdwn', text: `Are you sure you want to delete *${s.name}*? This cannot be undone.` },
+            confirm: { type: 'plain_text', text: 'Delete' },
+            deny: { type: 'plain_text', text: 'Cancel' },
+            style: 'danger',
+          },
+        }],
+      },
+    );
   }
 
   return {

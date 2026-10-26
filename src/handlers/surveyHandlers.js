@@ -5,6 +5,7 @@
 //   openSurveysTab      – swaps the modal to the Surveys tab (action: open_surveys_tab)
 //   openSurveyForm      – pushes the create/edit form (actions: create_survey, edit_survey)
 //   handleSurveySubmit  – validates and saves, then refreshes the tab (view: dill_survey_form)
+//   handleSurveyDelete  – Danger Zone delete (action: survey_danger_delete)
 
 const { buildSurveysView, buildSurveyFormView } = require('../bot/surveyModalBuilders');
 const { surveyKey } = require('../bot/surveyLifecycle');
@@ -20,7 +21,7 @@ const SURVEY_STATE_BUCKETS = ['sent', 'threads', 'posts'];
  * Pure, so validation can be unit-tested.
  *
  * @param {object} values - view.state.values
- * @returns {{ survey?: object, errors?: object, remove?: boolean }}
+ * @returns {{ survey?: object, errors?: object }}
  *
  * @example
  * parseSurveyForm(values)
@@ -30,7 +31,6 @@ const SURVEY_STATE_BUCKETS = ['sent', 'threads', 'posts'];
 function parseSurveyForm(values) {
   const v = (block) => values[block]?.value;
 
-  const remove = (v('survey_delete')?.selected_options || []).some(o => o.value === 'delete');
   const name = (v('survey_name')?.value || '').trim();
   const members = v('survey_members')?.selected_users || [];
   const questions = (v('survey_questions')?.value || '')
@@ -40,8 +40,6 @@ function parseSurveyForm(values) {
   const days = (v('survey_days')?.selected_options || []).map(o => o.value);
   const time = v('survey_time')?.selected_time;
   const postMode = v('survey_post_mode')?.selected_option?.value || POST_MODES.THREAD;
-
-  if (remove) return { remove: true };
 
   // ── Validation ──
   const errors = {};
@@ -103,25 +101,20 @@ async function openSurveyForm(bot, { ack, action, body, client }) {
 
 async function handleSurveySubmit(bot, { ack, view, client }) {
   const { channel, originalName } = JSON.parse(view.private_metadata);
-  const { survey, errors, remove } = parseSurveyForm(view.state.values);
+  const { survey, errors } = parseSurveyForm(view.state.values);
 
   if (errors) return ack({ response_action: 'errors', errors });
 
   // A new name must not overwrite a different existing survey
-  if (survey && survey.name !== originalName && bot.surveyStore.getItem(channel, survey.name)) {
+  if (survey.name !== originalName && bot.surveyStore.getItem(channel, survey.name)) {
     return ack({ response_action: 'errors', errors: { survey_name: 'A survey with this name already exists here.' } });
   }
   await ack();
 
   // ── Save ──
-  if (remove && originalName) {
-    deleteSurveyData(bot, channel, originalName);
-    console.log(`[INFO] Deleted survey '${originalName}' in ${channel}`);
-  } else if (survey) {
-    if (originalName && originalName !== survey.name) renameSurveyData(bot, channel, originalName, survey.name);
-    bot.surveyStore.setItem(channel, survey.name, survey);
-    console.log(`[INFO] Saved survey '${survey.name}' in ${channel}`);
-  }
+  if (originalName && originalName !== survey.name) renameSurveyData(bot, channel, originalName, survey.name);
+  bot.surveyStore.setItem(channel, survey.name, survey);
+  console.log(`[INFO] Saved survey '${survey.name}' in ${channel}`);
   bot.surveyStore.save();
   bot.surveyStateStore.save();
   await bot.createBackup();
@@ -134,4 +127,36 @@ async function handleSurveySubmit(bot, { ack, view, client }) {
   }
 }
 
-module.exports = { parseSurveyForm, openSurveysTab, openSurveyForm, handleSurveySubmit };
+/**
+ * Danger Zone "Delete Survey" button (Slack has already shown the confirm
+ * dialog). Swaps the form for a "deleted" message, matching how rotation
+ * deletes behave, and refreshes the Surveys tab underneath.
+ */
+async function handleSurveyDelete(bot, { ack, body, client }) {
+  await ack();
+  try {
+    const { channel, originalName } = JSON.parse(body.view.private_metadata);
+
+    deleteSurveyData(bot, channel, originalName);
+    bot.surveyStore.save();
+    bot.surveyStateStore.save();
+    console.log(`[INFO] Deleted survey '${originalName}' in ${channel}`);
+    await bot.createBackup();
+
+    await client.views.update({
+      view_id: body.view.id,
+      view: {
+        type: 'modal',
+        callback_id: 'dill_action_complete',
+        title: { type: 'plain_text', text: 'Survey Deleted' },
+        close: { type: 'plain_text', text: 'Close' },
+        blocks: [{ type: 'section', text: { type: 'mrkdwn', text: `*${originalName}* has been deleted.` } }],
+      },
+    });
+    await client.views.update({ view_id: body.view.root_view_id, view: buildSurveysView(bot, channel) });
+  } catch (error) {
+    console.error('[ERROR] Survey delete failed:', error);
+  }
+}
+
+module.exports = { parseSurveyForm, openSurveysTab, openSurveyForm, handleSurveySubmit, handleSurveyDelete };

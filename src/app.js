@@ -46,7 +46,7 @@ const { openLeaveModal, handleLeaveAddOpen, handleLeaveAddSubmit, handleLeaveRem
 const { handlePickNotesPreview, handlePreviewButton } = require('./handlers/pickNotesHandlers');
 const { startSurveyScheduler } = require('./bot/surveyLifecycle');
 const { handleSurveyDm }       = require('./handlers/surveyDmHandlers');
-const { openSurveysTab, openSurveyForm, handleSurveySubmit } = require('./handlers/surveyHandlers');
+const { openSurveysTab, openSurveyForm, handleSurveySubmit, handleSurveyDelete } = require('./handlers/surveyHandlers');
 const { openEditAnswers, handleEditSubmit } = require('./handlers/surveyEditHandlers');
 
 const config = require('../config');
@@ -160,6 +160,7 @@ class DillBot {
     this.app.action('create_survey',    async (payload) => openSurveyForm(this, payload));
     this.app.action('edit_survey',      async (payload) => openSurveyForm(this, payload));
     this.app.view('dill_survey_form',   async (payload) => handleSurveySubmit(this, payload));
+    this.app.action('survey_danger_delete', async (payload) => handleSurveyDelete(this, payload));
     this.app.action('survey_edit_answers',       async (payload) => openEditAnswers(this, payload));
     this.app.view('survey_edit_answers_submit',  async (payload) => handleEditSubmit(this, payload));
 

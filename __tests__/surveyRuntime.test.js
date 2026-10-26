@@ -4,7 +4,7 @@
 
 const { surveyTick } = require('../src/bot/surveyLifecycle');
 const { handleSurveyDm } = require('../src/handlers/surveyDmHandlers');
-const { parseSurveyForm } = require('../src/handlers/surveyHandlers');
+const { parseSurveyForm, handleSurveyDelete } = require('../src/handlers/surveyHandlers');
 const { openEditAnswers, handleEditSubmit } = require('../src/handlers/surveyEditHandlers');
 
 // ── Fakes ─────────────────────────────────────────────────────────────────────
@@ -25,7 +25,7 @@ function makeBot(postMode = 'thread') {
   let ts = 0;
   const client = {
     users: { info: jest.fn(async ({ user }) => ({ user: { tz: TZ[user], real_name: `Name ${user}`, profile: { image_72: `https://img/${user}.png` } } })) },
-    views: { open: jest.fn(async () => ({})) },
+    views: { open: jest.fn(async () => ({})), update: jest.fn(async () => ({})) },
     reactions: { add: jest.fn(async () => ({})) },
     chat: {
       postMessage: jest.fn(async ({ channel }) => ({ ts: `${++ts}.000`, channel })),
@@ -186,6 +186,24 @@ describe('posting as the person and editing', () => {
   });
 });
 
+// ── Danger Zone ───────────────────────────────────────────────────────────────
+
+describe('handleSurveyDelete', () => {
+  test('deletes the survey and its history, then shows a deleted message', async () => {
+    const bot = makeBot();
+    await surveyTick(bot);
+    const view = { id: 'V2', root_view_id: 'V1', private_metadata: JSON.stringify({ channel: 'C1', originalName: 'Standup' }) };
+
+    await handleSurveyDelete(bot, { ack: async () => {}, body: { view }, client: bot.app.client });
+
+    expect(bot.surveyStore.getItem('C1', 'Standup')).toBeUndefined();
+    expect(bot.surveyStateStore.getItem('sent', 'C1::Standup')).toBeUndefined();
+    const [[deleted], [tab]] = bot.app.client.views.update.mock.calls;
+    expect(deleted.view.title.text).toBe('Survey Deleted');
+    expect(tab.view_id).toBe('V1');
+  });
+});
+
 // ── Form parsing ──────────────────────────────────────────────────────────────
 
 describe('parseSurveyForm', () => {
@@ -210,8 +228,4 @@ describe('parseSurveyForm', () => {
     expect(Object.keys(errors).sort()).toEqual(['survey_members', 'survey_questions']);
   });
 
-  test('delete wins over validation', () => {
-    const result = parseSurveyForm(values({ survey_name: { value: { value: '' } }, survey_delete: { value: { selected_options: [{ value: 'delete' }] } } }));
-    expect(result).toEqual({ remove: true });
-  });
 });
