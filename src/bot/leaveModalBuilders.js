@@ -12,6 +12,7 @@
 //     Collects the user(s), start date, and end date.
 
 const { getAllChannelLeave } = require('./leaveHelpers');
+const { buildTabRow } = require('./surveyModalBuilders');
 const { DateTime } = require('luxon');
 
 // ── Leave Calendar Modal ──────────────────────────────────────────────────────
@@ -32,13 +33,7 @@ function buildLeaveViewBlocks(leaveStore, channel) {
 
   // ── Tab navigation ────────────────────────────────────────────────────────
   // "Leave Calendar" is primary (highlighted) because we're on the Leave view.
-  blocks.push({
-    type: 'actions',
-    elements: [
-      { type: 'button', text: { type: 'plain_text', text: 'Rotations' }, action_id: 'open_rotations_tab', value: channel },
-      { type: 'button', text: { type: 'plain_text', text: 'Leave Calendar' }, action_id: 'open_leave_tab', style: 'primary', value: channel },
-    ],
-  });
+  blocks.push(buildTabRow(channel, 'leave'));
   blocks.push({ type: 'divider' });
 
   blocks.push({

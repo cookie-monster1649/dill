@@ -94,8 +94,11 @@ Go to [api.slack.com/apps](https://api.slack.com/apps) and create a new app **fr
 | `groups:write` | Manage private channels Dill is in |
 | `channels:join` | Join public channels when a pick is triggered |
 | `reactions:read` | Read :x: reactions on speaking-order lists |
+| `im:history` | Read survey answers people send Dill by DM |
 
-**Subscribe to bot events** under *Features → Event Subscriptions*: `reaction_added` and `reaction_removed` (used by speaking-order lists).
+**Subscribe to bot events** under *Features → Event Subscriptions*: `reaction_added` and `reaction_removed` (used by speaking-order lists), and `message.im` (used by daily surveys).
+
+**Allow DMs** under *Features → App Home*: tick *Allow users to send Slash commands and messages from the messages tab*, or nobody can reply to a survey.
 
 Alternatively, paste [`slack-app-manifest.json`](slack-app-manifest.json) into *App Manifest* to configure all of the above in one go.
 
@@ -281,6 +284,19 @@ Tick **Post a speaking order list** on any rotation to post a shuffled, numbered
 - **Leave** – members on leave that day are left off
 - **Opting out** – anyone who reacts :x: to the list is removed and the numbers close up. Removing the reaction puts them back in their original spot
 - **Post Speaking Order Now** – posts the list immediately, handy for testing
+
+---
+
+## Daily surveys
+
+Async standups in the style of Geekbot. Open `/dill` in the channel where answers should appear and choose **Surveys → New Survey**.
+
+- **Who and when** – pick the people, days and a time. Each person gets a DM at that time **in their own Slack timezone**
+- **Answering** – Dill asks one question at a time in the DM, and each reply answers the current question
+- **Posting** – when someone finishes, their answers post to the channel, either as replies in **one thread per day** (the parent shows who's still to answer) or as **one message per person**
+- **Leave** – people on leave in that channel aren't sent the survey
+- **Catch-up** – if Dill was offline at send time, it still sends the survey up to 2 hours late, but no later
+- **Overlaps** – if two surveys are due at once, the second waits until the first is finished. A new day's survey replaces yesterday's unfinished one
 
 ---
 

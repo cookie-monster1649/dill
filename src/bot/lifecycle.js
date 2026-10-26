@@ -79,6 +79,7 @@ function setupGracefulShutdown(bot) {
     console.log(`[INFO] Received ${signal}, shutting down gracefully...`);
     try {
       bot.schedulerService.stopAllJobs();
+      bot.surveyJob?.stop();
       console.log('[INFO] Scheduler jobs stopped');
 
       if (bot.httpServer) {

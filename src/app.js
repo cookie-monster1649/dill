@@ -15,6 +15,8 @@
 //   Button/modal callbacks         →  src/handlers/actionHandlers.js
 //   Leave calendar UI              →  src/handlers/leaveHandlers.js
 //   Pick message preview           →  src/handlers/pickNotesHandlers.js
+//   Daily surveys (send + post)    →  src/bot/surveyLifecycle.js, surveyPosting.js
+//   Survey DM answers              →  src/handlers/surveyDmHandlers.js
 
 require('dotenv').config();
 
@@ -41,6 +43,9 @@ const { handleHelpCommand, handleStatusCommand, handleResetCommand, handlePickCo
 const { handleRestoreBackupCommand, handleDeleteBackupCommand, handleDeleteBackupConfirm, handleKillKillKillCommand } = require('./commands/backupCommands');
 const { openLeaveModal, handleLeaveAddOpen, handleLeaveAddSubmit, handleLeaveRemove } = require('./handlers/leaveHandlers');
 const { handlePickNotesPreview, handlePreviewButton } = require('./handlers/pickNotesHandlers');
+const { startSurveyScheduler } = require('./bot/surveyLifecycle');
+const { handleSurveyDm }       = require('./handlers/surveyDmHandlers');
+const { openSurveysTab, openSurveyForm, handleSurveySubmit } = require('./handlers/surveyHandlers');
 
 const config = require('../config');
 
@@ -57,6 +62,8 @@ class DillBot {
     this.queueStore    = new NestedStore('rotations.json');
     this.stateStore    = new NestedStore('activestate.json');
     this.leaveStore    = new NestedStore('leave.json');
+    this.surveyStore      = new NestedStore('surveys.json');
+    this.surveyStateStore = new NestedStore('surveystate.json');
 
     this.analyticsService  = new AnalyticsService(config.ANALYTICS_RETENTION_DAYS);
     this.schedulerService  = new SchedulerService();
@@ -142,6 +149,16 @@ class DillBot {
     this.app.event('reaction_added',   async ({ event }) => handleSpeakingOrderReaction(this, event, true));
     this.app.event('reaction_removed', async ({ event }) => handleSpeakingOrderReaction(this, event, false));
 
+    // ── Survey answers ─────────────────────────────────────────────────────
+    // Every DM to Dill is treated as the answer to the person's current question
+    this.app.event('message', async (payload) => handleSurveyDm(this, { message: payload.event }));
+
+    // ── Surveys tab / form ─────────────────────────────────────────────────
+    this.app.action('open_surveys_tab', async (payload) => openSurveysTab(this, payload));
+    this.app.action('create_survey',    async (payload) => openSurveyForm(this, payload));
+    this.app.action('edit_survey',      async (payload) => openSurveyForm(this, payload));
+    this.app.view('dill_survey_form',   async (payload) => handleSurveySubmit(this, payload));
+
     // ── Leave actions / views ──────────────────────────────────────────────
     // Both tab buttons use views.update to swap the modal content in place,
     // so the user never sees a second modal opening on top of the first.
@@ -220,7 +237,7 @@ class DillBot {
     this.persistentStorageService = new PersistentStorageService(
       this.app.client,
       storageChannelId,
-      { configStore: this.configStore, queueStore: this.queueStore, stateStore: this.stateStore, analyticsService: this.analyticsService, leaveStore: this.leaveStore },
+      { configStore: this.configStore, queueStore: this.queueStore, stateStore: this.stateStore, analyticsService: this.analyticsService, leaveStore: this.leaveStore, surveyStore: this.surveyStore, surveyStateStore: this.surveyStateStore },
       config
     );
 
@@ -252,6 +269,7 @@ class DillBot {
 
     await this.initializePersistentStorage();
     this.scheduleAll();
+    this.surveyJob = startSurveyScheduler(this);
     startHttpServer(this);
     setupGracefulShutdown(this);
 

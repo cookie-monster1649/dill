@@ -35,7 +35,8 @@
                 "groups:write",
                 "groups:history",
                 "users:read",
-                "reactions:read"
+                "reactions:read",
+                "im:history"
             ]
         },
         "pkce_enabled": false
@@ -44,7 +45,8 @@
         "event_subscriptions": {
             "bot_events": [
                 "reaction_added",
-                "reaction_removed"
+                "reaction_removed",
+                "message.im"
             ]
         },
         "interactivity": {
