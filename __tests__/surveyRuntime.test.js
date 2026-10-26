@@ -121,6 +121,15 @@ describe('handleSurveyDm', () => {
     expect(bot.app.client.chat.postMessage).not.toHaveBeenCalled();
   });
 
+  test('cries at "bad bot" and asks "Is this Alex?" when someone is rude', async () => {
+    const bot = makeBot();
+    await handleSurveyDm(bot, { message: { channel_type: 'im', channel: 'D1', ts: '9.000', user: 'U1', text: 'bad bot' } });
+    expect(bot.app.client.reactions.add).toHaveBeenCalledWith({ channel: 'D1', timestamp: '9.000', name: 'cry' });
+
+    await handleSurveyDm(bot, { message: { channel_type: 'im', channel: 'D1', ts: '9.100', user: 'U1', text: 'shut up dill' } });
+    expect(sentTo(bot, 'U1').map(m => m.text)).toEqual(['Is this Alex?']);
+  });
+
   test('treats "thanks" as an answer mid-survey', async () => {
     const bot = makeBot();
     await surveyTick(bot);

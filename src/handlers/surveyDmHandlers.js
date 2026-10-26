@@ -15,7 +15,7 @@ const {
   askCurrentQuestion,
 } = require('../bot/surveyLifecycle');
 const { postCompletedSurvey, recordDoneMessage, findPostByAnswerTs, updatePostedAnswers } = require('../bot/surveyPosting');
-const { LOVE_REACTION, isGratitude } = require('../utils/gratitude');
+const { BANTER, REACTIONS, RUDE_REPLY, classifyBanter } = require('../utils/banter');
 
 // ── Filtering ─────────────────────────────────────────────────────────────────
 
@@ -53,12 +53,18 @@ function dm(bot, userId, text) {
   return slackApiCall(bot.app.client.chat.postMessage, { channel: userId, text });
 }
 
-// A failed reaction is only logged – a missing heart isn't worth an error DM
-async function reactWithLove(bot, message) {
+/**
+ * Responds to banter aimed at Dill: ❤️ for praise, 😢 for "bad bot", and a
+ * suspicious question for anything really rude. A failed reaction is only
+ * logged – a missing emoji isn't worth an error DM.
+ */
+async function respondToBanter(bot, message, kind) {
+  if (kind === BANTER.RUDE) return dm(bot, message.user, RUDE_REPLY);
+
   try {
-    await bot.app.client.reactions.add({ channel: message.channel, timestamp: message.ts, name: LOVE_REACTION });
+    await bot.app.client.reactions.add({ channel: message.channel, timestamp: message.ts, name: REACTIONS[kind] });
   } catch (error) {
-    console.warn(`[WARN] Could not react to thanks from ${message.user}: ${error.data?.error || error.message}`);
+    console.warn(`[WARN] Could not react to banter from ${message.user}: ${error.data?.error || error.message}`);
   }
 }
 
@@ -84,9 +90,10 @@ async function handleSurveyDm(bot, { message }) {
   const state = getPersonState(bot, userId);
 
   if (!state?.active) {
-    // "thanks" / "good bot" gets a ❤️ rather than the "no survey" reply.
-    // Only when idle – mid-survey every message is an answer.
-    if (isGratitude(message.text)) return reactWithLove(bot, message);
+    // "thanks" / "bad bot" / swearing gets a reaction rather than the
+    // "no survey" reply. Only when idle – mid-survey every message is an answer.
+    const banter = classifyBanter(message.text);
+    if (banter) return respondToBanter(bot, message, banter);
     await dm(bot, userId, buildIdleText());
     return;
   }
