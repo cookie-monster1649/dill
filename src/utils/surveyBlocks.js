@@ -14,6 +14,22 @@ const POST_MODES = Object.freeze({
   INDIVIDUAL: 'individual',  // each person's answers as a top-level message
 });
 
+// Label for the free-text note added with "Say something else"
+const EXTRA_QUESTION = 'Anything else?';
+
+/**
+ * The survey's questions and answers plus the "Anything else?" note, if
+ * the person added one. Everything that renders answers goes through here.
+ *
+ * @example
+ * withExtra({ questions: ['Q1'] }, ['A1'], 'Off Friday')
+ * // → { questions: ['Q1', 'Anything else?'], answers: ['A1', 'Off Friday'] }
+ */
+function withExtra(survey, answers, extra) {
+  if (!extra) return { questions: survey.questions, answers };
+  return { questions: [...survey.questions, EXTRA_QUESTION], answers: [...survey.questions.map((_, i) => answers[i] || ''), extra] };
+}
+
 // Slack rejects section text over 3000 characters
 const MAX_SECTION_CHARS = 2900;
 
@@ -94,23 +110,26 @@ function buildDoneText(name, channel) {
  * @param {string}   channel
  * @param {string}   date    - ISO date of the survey run
  * @param {string[]} answers
- * @param {boolean}  [edited]
+ * @param {object}   [options] - { edited: true, extra: 'Off Friday' }
  */
-function buildDoneBlocks(survey, channel, date, answers, edited = false) {
-  const blocks = [{
-    type: 'section',
-    text: { type: 'mrkdwn', text: buildDoneText(survey.name, channel) },
-    accessory: {
-      type: 'button',
-      text: { type: 'plain_text', text: 'Edit answers' },
-      action_id: 'survey_edit_answers',
-      value: JSON.stringify({ channel, name: survey.name, date }),
-    },
-  }, ...buildAnswerSections(survey.questions, answers)];
+function buildDoneBlocks(survey, channel, date, answers, { edited = false, extra = '' } = {}) {
+  const value = JSON.stringify({ channel, name: survey.name, date });
+  const all = withExtra(survey, answers, extra);
 
+  const blocks = [
+    { type: 'section', text: { type: 'mrkdwn', text: buildDoneText(survey.name, channel) } },
+    ...buildAnswerSections(all.questions, all.answers),
+  ];
   if (edited) {
     blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: '_(edited – the channel post is updated too)_' }] });
   }
+  blocks.push({
+    type: 'actions',
+    elements: [
+      { type: 'button', text: { type: 'plain_text', text: 'Edit answers' }, action_id: 'survey_edit_answers', value },
+      { type: 'button', text: { type: 'plain_text', text: 'Say something else' }, action_id: 'survey_add_more', value },
+    ],
+  });
   return blocks;
 }
 
@@ -123,7 +142,7 @@ function buildDoneBlocks(survey, channel, date, answers, edited = false) {
  * @param {string}   channel
  * @param {string[]} answers - Currently posted answers
  */
-function buildEditAnswersView(survey, channel, answers) {
+function buildEditAnswersView(survey, channel, answers, extra = '') {
   const blocks = survey.questions.map((question, i) => ({
     type: 'input',
     block_id: `answer_${i}`,
@@ -136,6 +155,18 @@ function buildEditAnswersView(survey, channel, answers) {
       initial_value: unescapeSlack(answers[i] || '').slice(0, MAX_INPUT_CHARS),
     },
   }));
+
+  // Optional, so clearing it removes the note from the post
+  blocks.push({
+    type: 'input',
+    block_id: 'answer_extra',
+    optional: true,
+    label: { type: 'plain_text', text: EXTRA_QUESTION },
+    element: {
+      type: 'plain_text_input', action_id: 'value', multiline: true, max_length: MAX_INPUT_CHARS,
+      ...(extra ? { initial_value: unescapeSlack(extra).slice(0, MAX_INPUT_CHARS) } : {}),
+    },
+  });
 
   return {
     type: 'modal',
@@ -167,6 +198,7 @@ const QUESTION_COLOURS = ['#9FD3D0', '#8FA0C4', '#E8B38A', '#B9A3D6', '#A8C99B',
  * @param {object}   survey     - { name, questions: ['Q1', 'Q2'] }
  * @param {object}   author     - { userId: 'U1', name: 'Alex Smith' } (name may be missing)
  * @param {string[]} answers
+ * @param {string}   [extra]    - "Anything else?" note, shown last if present
  * @returns {{ text: string, blocks: object[], attachments: object[] }}
  *
  * @example
@@ -175,13 +207,14 @@ const QUESTION_COLOURS = ['#9FD3D0', '#8FA0C4', '#E8B38A', '#B9A3D6', '#A8C99B',
  * //     blocks: [ section "Alex posted an update for *Standup*" ],
  * //     attachments: [ { color: '#9FD3D0', blocks: [ section "*Yesterday?*\nShipped it" ] } ] }
  */
-function buildAnswerMessage(survey, author, answers) {
+function buildAnswerMessage(survey, author, answers, extra = '') {
   // Falls back to a mention if Slack didn't give us a name
   const who = author.name || `<@${author.userId}>`;
   const intro = `${who} posted an update for *${survey.name}*`;
 
   // "No" / "nope" / "n/a" answers are left out of the channel post
-  const sections = buildAnswerSections(survey.questions, answers, { hideEmpty: true });
+  const all = withExtra(survey, answers, extra);
+  const sections = buildAnswerSections(all.questions, all.answers, { hideEmpty: true });
   const body = sections.length > 0
     ? sections
     : [{ type: 'section', text: { type: 'mrkdwn', text: '_Nothing to report._' } }];
@@ -240,6 +273,27 @@ function buildThreadParentBlocks(name, dateLabel, members, completed) {
   ];
 }
 
+/**
+ * The "Say something else" form: one free-text field whose text is added
+ * to the end of the person's post.
+ */
+function buildAnythingElseView(survey, channel, date) {
+  return {
+    type: 'modal',
+    callback_id: 'survey_add_more_submit',
+    private_metadata: JSON.stringify({ channel, name: survey.name, date }),
+    title: { type: 'plain_text', text: 'Say something else' },
+    submit: { type: 'plain_text', text: 'Add to post' },
+    close: { type: 'plain_text', text: 'Cancel' },
+    blocks: [{
+      type: 'input',
+      block_id: 'extra',
+      label: { type: 'plain_text', text: EXTRA_QUESTION },
+      element: { type: 'plain_text_input', action_id: 'value', multiline: true, max_length: MAX_INPUT_CHARS, focus_on_load: true },
+    }],
+  };
+}
+
 module.exports = {
   POST_MODES,
   escapeSlack,
@@ -250,6 +304,8 @@ module.exports = {
   buildReminderText,
   buildDoneBlocks,
   buildEditAnswersView,
+  buildAnythingElseView,
+  EXTRA_QUESTION,
   buildIdleText,
   buildAnswerMessage,
   buildThreadParentBlocks,

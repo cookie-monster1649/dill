@@ -76,9 +76,9 @@ async function authorFields(bot, userId) {
 }
 
 // The answer message, introduced with the person's name like Geekbot
-async function answerMessage(bot, survey, userId, answers) {
+async function answerMessage(bot, survey, userId, answers, extra = '') {
   const { realName } = (await getUserProfile(bot, userId)) || {};
-  return buildAnswerMessage(survey, { userId, name: realName }, answers);
+  return buildAnswerMessage(survey, { userId, name: realName }, answers, extra);
 }
 
 // ── Individual mode ───────────────────────────────────────────────────────────
@@ -208,27 +208,37 @@ function recordDoneMessage(bot, channel, name, userId, dmChannel, dmTs) {
 }
 
 /**
- * Replaces the answers in a person's existing channel post, then refreshes
- * the summary in their DM. The post keeps
+ * Changes a person's existing channel post – their answers and/or their
+ * "Anything else?" note – then refreshes the summary in their DM. The post keeps
  * its original author name and avatar – chat.update can't change those.
  */
-async function updatePostedAnswers(bot, survey, channel, userId, answers) {
-  return withSurveyLock(surveyKey(channel, survey.name), () => updateLocked(bot, survey, channel, userId, answers));
+async function updatePostedAnswers(bot, survey, channel, userId, patch) {
+  return withSurveyLock(surveyKey(channel, survey.name), () => updateLocked(bot, survey, channel, userId, patch));
 }
 
-async function updateLocked(bot, survey, channel, userId, answers) {
+/**
+ * Applies `patch` – { answers?, extra? } or a function of the current post
+ * returning one – then redraws the channel post and the DM summary.
+ * A function lets "Say something else" append to the note inside the lock,
+ * so two quick additions can't overwrite each other.
+ */
+async function updateLocked(bot, survey, channel, userId, patch) {
   const post = getLatestPost(bot, channel, survey.name, userId);
   if (!post) throw new Error('No posted answers to edit');
+
+  const changes = typeof patch === 'function' ? patch(post) : patch;
+  const answers = changes.answers ?? post.answers;
+  const extra = changes.extra ?? post.extra ?? '';
 
   await slackApiCall(bot.app.client.chat.update, {
     channel,
     ts: post.ts,
-    ...(await answerMessage(bot, survey, userId, answers)),
+    ...(await answerMessage(bot, survey, userId, answers, extra)),
   });
 
   const key = surveyKey(channel, survey.name);
   const posts = bot.surveyStateStore.getItem('posts', key) || {};
-  posts[userId] = { ...post, answers };
+  posts[userId] = { ...post, answers, extra };
   bot.surveyStateStore.setItem('posts', key, posts);
   bot.surveyStateStore.save();
 
@@ -238,7 +248,7 @@ async function updateLocked(bot, survey, channel, userId, answers) {
       channel: post.dmChannel,
       ts: post.dmTs,
       text: buildDoneText(survey.name, channel),
-      blocks: buildDoneBlocks(survey, channel, post.date, answers, true),
+      blocks: buildDoneBlocks(survey, channel, post.date, answers, { edited: true, extra }),
     });
   }
 }

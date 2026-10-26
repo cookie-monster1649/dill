@@ -49,7 +49,7 @@ const { startSurveyScheduler } = require('./bot/surveyLifecycle');
 const { handleSurveyDm }       = require('./handlers/surveyDmHandlers');
 const { handleSurveyReply }    = require('./handlers/surveyReplyHandlers');
 const { openSurveysTab, openSurveyForm, handleSurveySubmit, handleSurveyDelete } = require('./handlers/surveyHandlers');
-const { openEditAnswers, handleEditSubmit } = require('./handlers/surveyEditHandlers');
+const { openEditAnswers, handleEditSubmit, openAnythingElse, handleAnythingElse } = require('./handlers/surveyEditHandlers');
 
 const config = require('../config');
 
@@ -169,6 +169,8 @@ class DillBot {
     this.app.action('survey_danger_delete', async (payload) => handleSurveyDelete(this, payload));
     this.app.action('survey_edit_answers',       async (payload) => openEditAnswers(this, payload));
     this.app.view('survey_edit_answers_submit',  async (payload) => handleEditSubmit(this, payload));
+    this.app.action('survey_add_more',           async (payload) => openAnythingElse(this, payload));
+    this.app.view('survey_add_more_submit',      async (payload) => handleAnythingElse(this, payload));
 
     // ── Leave actions / views ──────────────────────────────────────────────
     // Both tab buttons use views.update to swap the modal content in place,

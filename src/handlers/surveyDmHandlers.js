@@ -161,7 +161,7 @@ async function handleAnswerEdit(bot, message) {
   const answers = [...posted.post.answers];
   answers[posted.index] = text.trim();
   try {
-    await updatePostedAnswers(bot, survey, posted.channel, userId, answers);
+    await updatePostedAnswers(bot, survey, posted.channel, userId, { answers });
     console.log(`[INFO] Updated survey answers for ${userId} in '${posted.name}' from a DM edit`);
     await bot.createBackup();
   } catch (error) {

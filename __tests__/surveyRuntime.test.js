@@ -154,11 +154,11 @@ describe('posting as the person and editing', () => {
     expect(post.icon_url).toBe('https://img/U1.png');
   });
 
-  test('the done DM offers an Edit answers button', async () => {
+  test('the done DM offers Edit answers and Say something else buttons', async () => {
     const bot = makeBot();
     await finishSurvey(bot);
     const done = sentTo(bot, 'U1').at(-1);
-    expect(done.blocks[0].accessory.action_id).toBe('survey_edit_answers');
+    expect(done.blocks.at(-1).elements.map(e => e.action_id)).toEqual(['survey_edit_answers', 'survey_add_more']);
   });
 
   test('Edit answers opens a prefilled form and saving updates the post in place', async () => {
@@ -182,7 +182,7 @@ describe('posting as the person and editing', () => {
     // The DM summary is refreshed too, since Dill can't edit the person's own replies
     const dmUpdate = bot.app.client.chat.update.mock.calls.map(([a]) => a).find(a => a.channel === 'U1');
     expect(dmUpdate.blocks[1].text.text).toBe('*Q1*\nA1 fixed');
-    expect(dmUpdate.blocks.at(-1).elements[0].text).toContain('edited');
+    expect(dmUpdate.blocks.some(b => b.type === 'context' && b.elements[0].text.includes('edited'))).toBe(true);
   });
 });
 

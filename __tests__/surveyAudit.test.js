@@ -322,3 +322,55 @@ describe('reminders', () => {
     expect(dmsTo(leave, v)).toHaveLength(0);
   });
 });
+
+// ── Say something else ────────────────────────────────────────────────────────
+
+describe('say something else', () => {
+  const { openAnythingElse, handleAnythingElse, handleEditSubmit } = require('../src/handlers/surveyEditHandlers');
+
+  async function finished(bot, u) {
+    bot.app.client.views = { open: jest.fn(async () => ({})) };
+    await surveyTick(bot);
+    await reply(bot, u, 'A1');
+    await reply(bot, u, 'A2');
+    return JSON.stringify({ channel: 'C1', name: 'Standup', date: '2026-10-26' });
+  }
+  const add = (bot, u, ref, text) => handleAnythingElse(bot, {
+    ack: async () => {}, body: { user: { id: u } },
+    view: { private_metadata: ref, state: { values: { extra: { value: { value: text } } } } },
+  });
+  const lastPostUpdate = bot => bot.app.client.chat.update.mock.calls.map(([a]) => a).filter(a => a.channel === 'C1').at(-1);
+  const texts = msg => msg.attachments.map(a => a.blocks[0].text.text);
+
+  test('opens an "Anything else?" form', async () => {
+    const bot = makeBot();
+    const [u] = bot.members;
+    const ref = await finished(bot, u);
+    await openAnythingElse(bot, { ack: async () => {}, action: { value: ref }, body: { user: { id: u }, trigger_id: 'T' }, client: bot.app.client });
+    const view = bot.app.client.views.open.mock.calls[0][0].view;
+    expect(view.blocks[0].label.text).toBe('Anything else?');
+  });
+
+  test('appends the note to the end of the post, and again on a second add', async () => {
+    const bot = makeBot();
+    const [u] = bot.members;
+    const ref = await finished(bot, u);
+
+    await add(bot, u, ref, 'Off Friday');
+    expect(texts(lastPostUpdate(bot))).toEqual(['*Q1*\nA1', '*Q2*\nA2', '*Anything else?*\nOff Friday']);
+
+    await add(bot, u, ref, 'Back Monday & keen');
+    expect(texts(lastPostUpdate(bot)).at(-1)).toBe('*Anything else?*\nOff Friday\nBack Monday &amp; keen');
+  });
+
+  test('Edit answers can change or clear the note', async () => {
+    const bot = makeBot();
+    const [u] = bot.members;
+    const ref = await finished(bot, u);
+    await add(bot, u, ref, 'Off Friday');
+
+    const values = { answer_0: { value: { value: 'A1' } }, answer_1: { value: { value: 'A2' } }, answer_extra: { value: { value: '' } } };
+    await handleEditSubmit(bot, { ack: async () => {}, body: { user: { id: u } }, view: { private_metadata: ref, state: { values } } });
+    expect(texts(lastPostUpdate(bot))).toEqual(['*Q1*\nA1', '*Q2*\nA2']);
+  });
+});
