@@ -8,6 +8,7 @@ const { compareByLastAccepted, generateShuffledRotation } = require('../utils/ro
 const { getIsoDateTz }          = require('../utils/dateHelpers');
 const { normalizeRotationName } = require('../utils/rotationHelpers');
 const { readSpeakingOrderFields } = require('../utils/speakingOrderModalBlocks');
+const { readPickNotes }         = require('../utils/pickNotesModalBlocks');
 const { initialAnchorWeek }     = require('../utils/pickSchedule');
 const config                    = require('../../config');
 
@@ -198,6 +199,7 @@ class RotationCrudHandlers {
     const frequency  = v.frequency_block.frequency_select.selected_option?.value || 'weekly';
     const tzValue    = v.schedule_tz.tz_select.selected_option?.value || 'Etc/GMT+0';
     const speakingOrderFields = readSpeakingOrderFields(v);
+    const pickNotes  = readPickNotes(v);
 
     const oldCfg     = this.bot.configStore.getItem(channel, editingName);
     const oldMembers = oldCfg?.members || [];
@@ -208,6 +210,7 @@ class RotationCrudHandlers {
     const newConfig = {
       days, time, members: newMembers, tz: tzValue, frequency,
       ...speakingOrderFields,
+      pickNotes,
       startDate: oldCfg?.startDate || new Date().toISOString()
     };
 

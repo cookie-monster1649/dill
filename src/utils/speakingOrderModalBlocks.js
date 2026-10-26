@@ -1,8 +1,7 @@
 // ── Speaking Order Modal Blocks ───────────────────────────────────────────────
 //
-// Block Kit fragments for the rotation edit modal: the pick-notes field
-// (every rotation) and the speaking-order checkbox plus its settings (shown
-// only when the checkbox is ticked).
+// Block Kit fragments for the rotation edit modal: the speaking-order
+// checkbox plus its settings (shown only when the checkbox is ticked).
 
 const { hasSpeakingOrder } = require('./speakingOrderHelpers');
 
@@ -20,27 +19,6 @@ const LIST_DAY_OPTIONS = [
 ].map(([value, text]) => ({ text: { type: 'plain_text', text }, value }));
 
 const DEFAULT_LIST_DAY = 'wed';
-
-// ── Pick notes ────────────────────────────────────────────────────────────────
-
-/**
- * Free-text notes appended to every pick message for this rotation.
- */
-function buildPickNotesBlock(existingConfig) {
-  return {
-    type: 'input',
-    block_id: 'pick_notes',
-    optional: true,
-    label: { type: 'plain_text', text: 'Pick message notes' },
-    hint: { type: 'plain_text', text: 'Shown in every pick message, e.g. what to prepare and a Trello board link.' },
-    element: {
-      type: 'plain_text_input',
-      action_id: 'pick_notes_input',
-      multiline: true,
-      ...(existingConfig?.pickNotes && { initial_value: existingConfig.pickNotes }),
-    },
-  };
-}
 
 // ── Speaking order ────────────────────────────────────────────────────────────
 
@@ -108,24 +86,22 @@ function buildSpeakingOrderSettingsBlocks(existingConfig, preName) {
 // ── Submission parsing ────────────────────────────────────────────────────────
 
 /**
- * Reads pick notes and speaking-order fields from a modal submission.
+ * Reads speaking-order fields from a modal submission.
  *
  * @example
  * readSpeakingOrderFields(view.state.values)
- * // → { pickNotes: 'Update the board…', speakingOrder: true, speakingOrderDay: 'wed' }
- * // → { pickNotes: '', speakingOrder: false }
+ * // → { speakingOrder: true, speakingOrderDay: 'wed' }
+ * // → { speakingOrder: false }
  */
 function readSpeakingOrderFields(values) {
-  const pickNotes = values.pick_notes?.pick_notes_input?.value || '';
   const selected = values.speaking_order_block?.speaking_order_toggle?.selected_options || [];
   const speakingOrder = selected.length > 0;
-  if (!speakingOrder) return { pickNotes, speakingOrder };
+  if (!speakingOrder) return { speakingOrder };
 
   return {
-    pickNotes,
     speakingOrder,
     speakingOrderDay: values.speaking_order_day?.speaking_order_day_select?.selected_option?.value || DEFAULT_LIST_DAY,
   };
 }
 
-module.exports = { buildPickNotesBlock, buildSpeakingOrderSettingsBlocks, readSpeakingOrderFields };
+module.exports = { buildSpeakingOrderSettingsBlocks, readSpeakingOrderFields };
