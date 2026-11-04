@@ -106,4 +106,14 @@ describe('rotationHelpers – queue state transitions', () => {
     reorderAfterAccept(queueStore, CHANNEL, ROT, 'U_UNKNOWN', config);
     expect(queueStore.getItem(CHANNEL, ROT)).toHaveLength(2);
   });
+
+  test('reorderAfterAccept records the pick date it is given, not today', () => {
+    const config = { members: [U1, U2], tz: 'Australia/Sydney' };
+    queueStore.setItem(CHANNEL, ROT, generateShuffledRotation([U1, U2]));
+
+    const peek = peekNextUser(queueStore, CHANNEL, ROT, config);
+    reorderAfterAccept(queueStore, CHANNEL, ROT, peek.user, config, undefined, '2026-11-03');
+    const turn = queueStore.getItem(CHANNEL, ROT).find(t => t.user === peek.user);
+    expect(turn.lastAcceptedDate).toBe('2026-11-03');
+  });
 });

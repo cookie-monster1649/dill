@@ -233,8 +233,9 @@ function peekNextUser(queueStore, channel, name, config) {
  * @param {object} config             - The rotation configuration
  * @param {string[]} config.members   - Array of user IDs
  * @param {() => number} [randomFn]   - Optional PRNG for shuffle
+ * @param {string} [acceptedDate]     - ISO date of the pick being accepted (defaults to today)
  */
-function reorderAfterAccept(queueStore, channel, name, acceptedUserId, config, randomFn) {
+function reorderAfterAccept(queueStore, channel, name, acceptedUserId, config, randomFn, acceptedDate = null) {
   const members = Array.isArray(config.members) ? config.members : [];
   let schedule = getRotationSchedule(queueStore, channel, name, members, randomFn);
 
@@ -242,10 +243,9 @@ function reorderAfterAccept(queueStore, channel, name, acceptedUserId, config, r
   const acceptedIndex = schedule.findIndex(t => t.user === acceptedUserId);
 
   if (acceptedIndex !== -1) {
-    // Update the user's last accepted date and reset skip status
-    // Use timezone-aware date function to get the correct date in the rotation's timezone
-    const now = new Date();
-    const dateToSet = getIsoDateTz(now, config.tz); // YYYY-MM-DD format in rotation timezone
+    // Update the user's last accepted date and reset skip status. Callers pass
+    // the pick's own date; today (in the rotation's timezone) is the fallback.
+    const dateToSet = acceptedDate || getIsoDateTz(new Date(), config.tz); // 'YYYY-MM-DD'
     schedule[acceptedIndex].lastAcceptedDate = dateToSet;
     schedule[acceptedIndex].isSkipped = false;
 

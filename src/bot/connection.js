@@ -8,6 +8,7 @@
 // this.socketReceiver, etc., without needing to be class methods.
 
 const { SocketModeReceiver, LogLevel } = require('@slack/bolt');
+const config = require('../../config');
 
 // ── Setup ─────────────────────────────────────────────────────────────────────
 
@@ -23,7 +24,9 @@ const { SocketModeReceiver, LogLevel } = require('@slack/bolt');
 function setupSocketReceiver(bot) {
   const socketReceiver = new SocketModeReceiver({
     appToken: process.env.SLACK_APP_TOKEN,
-    logLevel: LogLevel.DEBUG,
+    // Follows LOG_LEVEL (default INFO). DEBUG logs every raw Slack payload –
+    // including DM text such as survey answers – so never hard-code it here.
+    logLevel: LogLevel[config.LOG_LEVEL?.toUpperCase()] ?? LogLevel.INFO,
     connectionTimeout: 30000,
     maxReconnectionAttempts: 10,
     reconnectionBackoff: 1000,

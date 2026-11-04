@@ -17,6 +17,12 @@ const { isUserOnLeave }                        = require('../bot/leaveHelpers');
 const { DateTime }                             = require('luxon');
 const config                                   = require('../../config');
 
+// Slack message ts ('1793646000.000100') is the post time in epoch seconds
+function pickDateFromTs(messageTs) {
+  const seconds = parseFloat(messageTs);
+  return Number.isFinite(seconds) ? new Date(seconds * 1000) : new Date();
+}
+
 class PickActionHandlers {
   /**
    * @param {import('../app')} bot - The main DillBot instance
@@ -55,7 +61,12 @@ class PickActionHandlers {
     const { rotationName: name, userId: user } = rotationInfo;
 
     const cfg     = this.bot.configStore.getItem(channelId, name) || {};
-    const date    = new Date();
+    // The pick's own date comes from when its message was posted, not when
+    // the button was clicked. Someone in another timezone accepting after
+    // midnight Sydney time would otherwise count as accepting *today's* pick,
+    // and the duplicate-pick guard would then skip today's real pick.
+    //   messageTs '1793646000.000100' → 2026-11-03 06:00 Sydney → '2026-11-03'
+    const date    = pickDateFromTs(messageTs);
     const dateISO = getIsoDateTz(date, cfg.tz);
 
     // ── Track analytics ──────────────────────────────────────────────────────
@@ -69,7 +80,7 @@ class PickActionHandlers {
     }, dateISO);
 
     // ── Update queue state ───────────────────────────────────────────────────
-    reorderAfterAccept(this.bot.queueStore, channelId, name, user, cfg);
+    reorderAfterAccept(this.bot.queueStore, channelId, name, user, cfg, undefined, dateISO);
 
     // ── Update the Slack message ─────────────────────────────────────────────
     const dateString = formatDateTz(date, cfg.tz);

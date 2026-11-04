@@ -16,6 +16,7 @@ const { isUserOnLeave } = require('./leaveHelpers');
 const { hasSpeakingOrder } = require('../utils/speakingOrderHelpers');
 const { recordSpeakingOrderPick, postSpeakingOrder } = require('./speakingOrderLifecycle');
 const { weekInterval, legacyAnchorWeek } = require('../utils/pickSchedule');
+const { refileMisdatedAccepts } = require('../utils/acceptRepair');
 
 // ── Pick Dispatch ─────────────────────────────────────────────────────────────
 
@@ -123,6 +124,7 @@ function scheduleAll(bot) {
   bot.schedulerService.stopAllJobs();
 
   migrateMissingAnchors(bot);
+  repairMisdatedAccepts(bot);
 
   const allChannels = bot.configStore.data || {};
   for (const channel of Object.keys(allChannels)) {
@@ -174,6 +176,36 @@ function migrateMissingAnchors(bot) {
     bot.configStore.save();
     bot.createBackup();
   }
+}
+
+// ── Accept Date Repair ────────────────────────────────────────────────────────
+
+/**
+ * Re-files acceptances that were stored under the click date instead of the
+ * pick's date (see utils/acceptRepair), so the duplicate-pick guard stops
+ * blocking real picks. Also corrects the accepted person's lastAcceptedDate
+ * if it still holds the wrong date. A no-op once the data is clean.
+ *
+ * @param {object} bot - The DillBot instance
+ */
+function repairMisdatedAccepts(bot) {
+  const store = bot.analyticsService.analyticsStore;
+  const tzFor = (channel, name) => bot.configStore.getItem(channel, name)?.tz;
+  const { events, moved } = refileMisdatedAccepts(store.get('events'), tzFor);
+  if (moved.length === 0) return;
+
+  store.data.events = events;
+  store.save();
+
+  // ── Queue dates ──
+  for (const { channelId, name, user, from, to } of moved) {
+    const schedule = bot.queueStore.getItem(channelId, name);
+    const entry = Array.isArray(schedule) ? schedule.find(t => t.user === user) : null;
+    if (entry?.lastAcceptedDate === from) entry.lastAcceptedDate = to;
+    console.log(`[INFO] Re-filed '${name}' acceptance by ${user} from ${from} to ${to}`);
+  }
+  bot.queueStore.save();
+  bot.createBackup();
 }
 
 // ── Daily Reset ───────────────────────────────────────────────────────────────
